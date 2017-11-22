@@ -323,7 +323,7 @@ class DCGAN(object):
       h2 = concat([h2, y], 1)
 
       ## Extra dense layer
-      hd = lrelu(linear(h2, self.dfc_dim / 2, 'd_hd_lin1'))
+      hd = lrelu(linear(h2, self.dfc_dim / 2, 'd_hd_lin'))
       hd = concat([hd, y], 1)
 
       h3 = linear(hd, 1, 'd_h3_lin')
@@ -387,7 +387,7 @@ class DCGAN(object):
       h0 = concat([h0, y], 1)
 
       ## Extra dense layer here
-      hd = tf.nn.relu(linear(h0, self.gfc_dim / 2, 'g_hd_lin1'))
+      hd = tf.nn.relu(linear(h0, self.gfc_dim / 2, 'g_hd_lin'))
       hd = concat([hd, y], 1)
 
       h1 = tf.nn.relu(self.g_bn1(
@@ -457,7 +457,7 @@ class DCGAN(object):
       h0 = concat([h0, y], 1)
 
       ## Extra dense layer here
-      hd = tf.nn.relu(linear(h0, self.gfc_dim / 2, 'g_hd_lin1'), train=False)
+      hd = tf.nn.relu(linear(h0, self.gfc_dim / 2, 'g_hd_lin'))
       hd = concat([hd, y], 1)
 
       h1 = tf.nn.relu(self.g_bn1(
