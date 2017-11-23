@@ -135,10 +135,10 @@ class DCGAN(object):
       self.g_loss = -tf.reduce_mean(tf.log(self.D_))
     elif loss_type == 2:
       #wasserstein
-      self.d_loss_real = -tf.reduce_mean(self.D)
-      self.d_loss_fake = tf.reduce_mean(self.D_)
+      self.d_loss_real = tf.reduce_mean(self.D_logits)
+      self.d_loss_fake = -tf.reduce_mean(self.D_logits_)
       self.d_loss = self.d_loss_real+self.d_loss_fake
-      self.g_loss = -tf.reduce_mean(self.D_)
+      self.g_loss = -tf.reduce_mean(self.D_logits_)
 
     self.d_loss_real_sum = scalar_summary("d_loss_real", self.d_loss_real)
     self.d_loss_fake_sum = scalar_summary("d_loss_fake", self.d_loss_fake)
@@ -156,7 +156,7 @@ class DCGAN(object):
 
   def optimizer(self, config):
     if config.loss_type == 2:
-      d_optim = tf.train.RMSPropOptimizer(learning_rate=5e-5).minimize(self.d_loss, var_list=self.d_vars)
+      d_optim = tf.train.RMSPropOptimizer(learning_rate=5e-5).minimize(-self.d_loss, var_list=self.d_vars)
       g_optim = tf.train.RMSPropOptimizer(learning_rate=5e-5).minimize(self.g_loss, var_list=self.g_vars)
     else:
       d_optim = tf.train.AdamOptimizer(config.learning_rate, beta1=config.beta1) \
