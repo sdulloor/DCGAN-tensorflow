@@ -117,7 +117,7 @@ class DCGAN(object):
     #loss_type = 0 -> cross entropy
     #loss_type = 1 -> vanilla logloss
     #loss_type = 2 -> wasserstein
-    loss_type = 0
+    loss_type = config.loss_type
     
     if loss_type == 0:
       #cross entropy loss
