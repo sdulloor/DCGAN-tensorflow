@@ -60,8 +60,9 @@ class DCGAN(object):
 
     if self.dataset_name == 'mnist':
       self.data_X, self.data_y, self.c_dim = self.load_mnist()
+    elif self.dataset_name == 'celebA':
+      self.img_data, self.img_labels, self.c_dim = self.load_celebA()
     else:
-      # for large image datasets, we read images to tensors in memory on demand
       self.img_data, self.img_labels, self.c_dim = self.load_image_dataset()
 
     self.grayscale = (self.c_dim == 1)
@@ -162,6 +163,29 @@ class DCGAN(object):
                         .minimize(self.g_loss, var_list=self.g_vars)
     return d_optim, g_optim
 
+  def read_celebA(self, low, hi):
+    image_files = self.img_data[low: hi]
+    # read images
+    image = [
+        get_image(image_file,
+                  input_height=self.input_height,
+                  input_width=self.input_width,
+                  resize_height=self.output_height,
+                  resize_width=self.output_width,
+                  crop=self.crop,
+                  grayscale=self.grayscale) for image_file in image_files]
+    if (self.grayscale):
+      image_inputs = np.array(image).astype(np.float32)[:, :, :, None]
+    else:
+      image_inputs = np.array(image).astype(np.float32)
+
+    # image labels (one-hot vector)
+    y = np.array(self.img_labels[low, hi])
+    image_labels = np.zeros((y.shape[0], self.y_dim), dtype=np.float)
+    image_labels[np.arange(y.shape[0]), y] = 1.0
+    print("image_inputs.shape:{}, image_labels.shape:{}".format(image_inputs.shape, image_labels.shape))
+    return image_inputs, image_labels
+
   def read_images(self, image_files):
     # read images
     image = [
@@ -193,6 +217,8 @@ class DCGAN(object):
     if config.dataset == 'mnist':
       sample_inputs = self.data_X[0:self.sample_num]
       sample_labels = self.data_y[0:self.sample_num]
+    elif config.dataset == 'celebA':
+      sample_inputs, sample_labels = read_celebA(0, self.sample_num)
     else:
       sample_files = self.img_data[0:self.sample_num]
       sample_inputs, sample_labels = read_images(sample_files)
@@ -202,6 +228,8 @@ class DCGAN(object):
     if config.dataset == 'mnist':
       batch_images = self.data_X[idx*config.batch_size:(idx+1)*config.batch_size]
       batch_labels = self.data_y[idx*config.batch_size:(idx+1)*config.batch_size]
+    elif config.dataset == 'celebA':
+      batch_inputs, batch_labels = read_celebA(idx*config.batch_size, (idx+1)*config.batch_size)
     else:
       batch_files = self.img_data[idx*config.batch_size:(idx+1)*config.batch_size]
       batch_inputs, batch_labels = read_images(sample_files)
@@ -530,6 +558,31 @@ class DCGAN(object):
       y_vec[i,y[i]] = 1.0
     
     return X/255., y_vec, X[0].shape[-1]
+
+  def load_celebA(self):
+    data = pd.read_csv(os.path.join("./data", self.dataset_name, 'identity_CelebA.txt'), sep=' ')
+    # load 300 images of 10 identities
+    samples = data.groupby(['identity']).filter(lambda x: len(x) == 30).sort_values(by='identity').head(3000)
+    ids = samples['identity'].drop_duplicates().values.tolist()
+    di = dict(zip(ids, xrange(1, len(ids)+1, 1)))
+    samples['identity'] = samples['identity'].map(lambda x: di[x])
+
+    # load image filenames
+    images = [os.path.join("./data", self.dataset_name, x) for x in samples['image'].values.tolist()]
+
+    # find the number of channels
+    imreadImg = imread(images[0])
+    # check if image is a non-grayscale image by checking channel number
+    if len(imreadImg.shape) >= 3:
+      c_dim = imread(images[0]).shape[-1]
+    else:
+      c_dim = 1
+
+    # one-hot encoding of labels
+    self.y_dim = samples['identity'].max()
+    labels = samples['identity'].values.tolist()
+    print('images.length: {}, c_dim: {}, labels.length: {}'.format(len(images), c_dim, len(labels)))
+    return images, labels, c_dim
 
   # load images with the specified fname pattern
   def load_image_dataset(self):
