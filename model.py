@@ -182,7 +182,7 @@ class DCGAN(object):
     # image labels (one-hot vector)
     y = np.array(self.img_labels[low: hi])
     image_labels = np.zeros((y.shape[0], self.y_dim), dtype=np.float)
-    image_labels[np.arange(y.shape[0]), y] = 1.0
+    image_labels[np.arange(y.shape[0]), y-1] = 1.0
     print("image_inputs.shape:{}, image_labels.shape:{}".format(image_inputs.shape, image_labels.shape))
     return image_inputs, image_labels
 
