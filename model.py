@@ -180,7 +180,7 @@ class DCGAN(object):
       image_inputs = np.array(image).astype(np.float32)
 
     # image labels (one-hot vector)
-    y = np.array(self.img_labels[low, hi])
+    y = np.array(self.img_labels[low: hi])
     image_labels = np.zeros((y.shape[0], self.y_dim), dtype=np.float)
     image_labels[np.arange(y.shape[0]), y] = 1.0
     print("image_inputs.shape:{}, image_labels.shape:{}".format(image_inputs.shape, image_labels.shape))
@@ -218,7 +218,7 @@ class DCGAN(object):
       sample_inputs = self.data_X[0:self.sample_num]
       sample_labels = self.data_y[0:self.sample_num]
     elif config.dataset == 'celebA':
-      sample_inputs, sample_labels = read_celebA(0, self.sample_num)
+      sample_inputs, sample_labels = self.read_celebA(0, self.sample_num)
     else:
       sample_files = self.img_data[0:self.sample_num]
       sample_inputs, sample_labels = read_images(sample_files)
@@ -229,7 +229,7 @@ class DCGAN(object):
       batch_images = self.data_X[idx*config.batch_size:(idx+1)*config.batch_size]
       batch_labels = self.data_y[idx*config.batch_size:(idx+1)*config.batch_size]
     elif config.dataset == 'celebA':
-      batch_inputs, batch_labels = read_celebA(idx*config.batch_size, (idx+1)*config.batch_size)
+      batch_images, batch_labels = self.read_celebA(idx*config.batch_size, (idx+1)*config.batch_size)
     else:
       batch_files = self.img_data[idx*config.batch_size:(idx+1)*config.batch_size]
       batch_inputs, batch_labels = read_images(sample_files)
