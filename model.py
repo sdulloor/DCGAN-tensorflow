@@ -164,7 +164,9 @@ class DCGAN(object):
     return d_optim, g_optim
 
   def read_celebA(self, low, hi):
-    image_files = self.img_data[low: hi]
+    image_files_np = np.array(self.img_data)
+    image_files = image_files_np.take(range(low,hi), mode='wrap')
+      
     # read images
     image = [
         get_image(image_file,
@@ -180,7 +182,8 @@ class DCGAN(object):
       image_inputs = np.array(image).astype(np.float32)
 
     # image labels (one-hot vector)
-    y = np.array(self.img_labels[low: hi])
+    y_np = np.array(self.img_labels)
+    y = y_np.take(range(low,hi), mode='wrap')
     image_labels = np.zeros((y.shape[0], self.y_dim), dtype=np.float)
     image_labels[np.arange(y.shape[0]), y-1] = 1.0
     print("image_inputs.shape:{}, image_labels.shape:{}".format(image_inputs.shape, image_labels.shape))
