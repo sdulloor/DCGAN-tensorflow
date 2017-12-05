@@ -8,6 +8,7 @@ samples
 logs
 test*
 mnist_logs
+nohup*
 
 web/js/gen_layers.js
 

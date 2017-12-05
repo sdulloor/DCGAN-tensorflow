@@ -518,16 +518,16 @@ class DCGAN(object):
       return tf.nn.sigmoid(deconv2d(h2, [self.batch_size, s_h, s_w, self.c_dim], name='g_h3'))
 
   def discriminator(self, image, y=None, reuse=False):
-    #return self.dcgan_discriminator(image, y, reuse)
-    return self.dcgan_cond_discriminator(image, y, reuse)
+    return self.dcgan_discriminator(image, y, reuse)
+    #return self.dcgan_cond_discriminator(image, y, reuse)
 
   def generator(self, z, y=None):
-    #return self.dcgan_generator(z, y)
-    return self.dcgan_cond_generator(z, y)
+    return self.dcgan_generator(z, y)
+    #return self.dcgan_cond_generator(z, y)
 
   def sampler(self, z, y):
-    #return self.dcgan_sampler(z, y)
-    return self.dcgan_cond_sampler(z, y)
+    return self.dcgan_sampler(z, y)
+    #return self.dcgan_cond_sampler(z, y)
 
   def load_mnist(self):
     data_dir = os.path.join("./data", self.dataset_name)
