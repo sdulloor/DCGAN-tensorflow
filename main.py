@@ -18,7 +18,9 @@ flags.DEFINE_integer("input_height", 108, "The size of image to use (will be cen
 flags.DEFINE_integer("input_width", None, "The size of image to use (will be center cropped). If None, same value as input_height [None]")
 flags.DEFINE_integer("output_height", 64, "The size of the output images to produce [64]")
 flags.DEFINE_integer("output_width", None, "The size of the output images to produce. If None, same value as output_height [None]")
+flags.DEFINE_string("data_dir", "data", "Directory with image datasets [data]")
 flags.DEFINE_string("dataset", "celebA", "The name of dataset [celebA, mnist, lsun]")
+flags.DEFINE_string("input_fname_labels", "labels.txt", "The mapping between images and identities [*]")
 flags.DEFINE_string("input_fname_pattern", "*.jpg", "Glob pattern of filename of input images [*]")
 flags.DEFINE_string("checkpoint_dir", "checkpoint", "Directory name to save the checkpoints [checkpoint]")
 flags.DEFINE_string("sample_dir", "samples", "Directory name to save the image samples [samples]")
@@ -26,6 +28,7 @@ flags.DEFINE_boolean("train", False, "True for training, False for testing [Fals
 flags.DEFINE_boolean("crop", False, "True for training, False for testing [False]")
 flags.DEFINE_boolean("visualize", False, "True for visualizing, False for nothing [False]")
 flags.DEFINE_integer("generate_test_images", 100, "Number of images to generate during test. [100]")
+flags.DEFINE_boolean("conditional", False, "Model and train conditional GAN")
 flags.DEFINE_integer("loss_type", 0, "Loss type [0=cross entropy] 1=logloss 2=wasserstein")
 flags.DEFINE_boolean("generate", False, "Generate 100 sample images for testing. Defaults to [False]")
 
@@ -44,44 +47,34 @@ def main(_):
   if not os.path.exists(FLAGS.sample_dir):
     os.makedirs(FLAGS.sample_dir)
 
+  # y_dim is inferred from the dataset name or the labels file
+  if FLAGS.conditional and FLAGS.dataset != 'mnist':
+    labels_fname = os.path.join(FLAGS.dataset, input_fname_labels)
+    if not os.path.exists(labels_fname):
+      raise Exception("[!] conditional requires image<->identity labels")
+
   #gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.333)
   run_config = tf.ConfigProto()
   run_config.gpu_options.allow_growth=True
 
   with tf.Session(config=run_config) as sess:
-    if FLAGS.dataset == 'mnist':
-      dcgan = DCGAN(
-          sess,
-          input_width=FLAGS.input_width,
-          input_height=FLAGS.input_height,
-          output_width=FLAGS.output_width,
-          output_height=FLAGS.output_height,
-          batch_size=FLAGS.batch_size,
-          sample_num=FLAGS.batch_size,
-          y_dim=10,
-          z_dim=FLAGS.generate_test_images,
-          dataset_name=FLAGS.dataset,
-          input_fname_pattern=FLAGS.input_fname_pattern,
-          crop=FLAGS.crop,
-          checkpoint_dir=FLAGS.checkpoint_dir,
-          sample_dir=FLAGS.sample_dir,
-          loss_type=FLAGS.loss_type)
-    else:
-      dcgan = DCGAN(
-          sess,
-          input_width=FLAGS.input_width,
-          input_height=FLAGS.input_height,
-          output_width=FLAGS.output_width,
-          output_height=FLAGS.output_height,
-          batch_size=FLAGS.batch_size,
-          sample_num=FLAGS.batch_size,
-          z_dim=FLAGS.generate_test_images,
-          dataset_name=FLAGS.dataset,
-          input_fname_pattern=FLAGS.input_fname_pattern,
-          crop=FLAGS.crop,
-          checkpoint_dir=FLAGS.checkpoint_dir,
-          sample_dir=FLAGS.sample_dir,
-          loss_type=FLAGS.loss_type)
+    dcgan = DCGAN(
+        sess,
+        input_width=FLAGS.input_width,
+        input_height=FLAGS.input_height,
+        output_width=FLAGS.output_width,
+        output_height=FLAGS.output_height,
+        batch_size=FLAGS.batch_size,
+        sample_num=FLAGS.batch_size,
+        z_dim=FLAGS.generate_test_images,
+        data_dir=FLAGS.data_dir,
+        dataset_name=FLAGS.dataset,
+        input_fname_pattern=FLAGS.input_fname_pattern,
+        crop=FLAGS.crop,
+        checkpoint_dir=FLAGS.checkpoint_dir,
+        sample_dir=FLAGS.sample_dir,
+        conditional = FLAGS.conditional,
+        loss_type=FLAGS.loss_type)
 
     show_all_variables()
 

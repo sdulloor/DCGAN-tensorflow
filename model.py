@@ -17,10 +17,11 @@ def conv_out_size_same(size, stride):
 class DCGAN(object):
   def __init__(self, sess, input_height=108, input_width=108, crop=True,
          batch_size=64, sample_num = 64, output_height=64, output_width=64,
-         y_dim=None, z_dim=100, gf_dim=64, df_dim=64,
+         z_dim=100, gf_dim=64, df_dim=64,
          gfc_dim=1024, dfc_dim=1024, c_dim=3, dataset_name='default',
-         input_fname_labels='label.txt',
-         input_fname_pattern='*.jpg', checkpoint_dir=None, sample_dir=None, loss_type=0):
+         data_dir=None, input_fname_labels='labels.txt',
+         input_fname_pattern='*.jpg', checkpoint_dir=None, sample_dir=None,
+         conditional=False, loss_type=0):
     """
 
     Args:
@@ -35,6 +36,19 @@ class DCGAN(object):
       c_dim: (optional) Dimension of image color. For grayscale input, set to 1. [3]
     """
     self.sess = sess
+
+    self.data_dir = data_dir
+    self.dataset_name = dataset_name
+    self.input_fname_pattern = input_fname_pattern
+    self.checkpoint_dir = checkpoint_dir
+    self.sample_dir = sample_dir
+
+    if self.dataset_name == 'mnist':
+      self.data_X, self.data_y, self.y_dim, self.c_dim = self.load_mnist()
+    else:
+      self.img_data, self.img_labels, self.y_dim, self.c_dim = self.load_image_dataset()
+
+    self.grayscale = (self.c_dim == 1)
     self.crop = crop
 
     self.batch_size = batch_size
@@ -45,6 +59,8 @@ class DCGAN(object):
     self.output_height = output_height
     self.output_width = output_width
 
+    self.loss_type = loss_type
+    self.conditional = conditional
     self.y_dim = y_dim
     self.z_dim = z_dim
 
@@ -54,22 +70,9 @@ class DCGAN(object):
     self.gfc_dim = gfc_dim
     self.dfc_dim = dfc_dim
 
-    self.dataset_name = dataset_name
-    self.input_fname_pattern = input_fname_pattern
-    self.checkpoint_dir = checkpoint_dir
+    self.build_model()
 
-    if self.dataset_name == 'mnist':
-      self.data_X, self.data_y, self.c_dim = self.load_mnist()
-    #elif self.dataset_name == 'celebA':
-    #  self.img_data, self.img_labels, self.c_dim = self.load_celebA()
-    else:
-      self.img_data, self.img_labels, self.c_dim = self.load_image_dataset()
-
-    self.grayscale = (self.c_dim == 1)
-
-    self.build_model(loss_type)
-
-  def build_model(self, loss_type=0):
+  def build_model(self):
     # batch normalization : deals with poor initialization helps gradient flow
     self.d_bn1 = batch_norm(name='d_bn1')
     self.d_bn2 = batch_norm(name='d_bn2')
@@ -77,18 +80,15 @@ class DCGAN(object):
     if not self.y_dim:
       self.d_bn3 = batch_norm(name='d_bn3')
 
-
     if self.y_dim:
       self.y = tf.placeholder(tf.float32, [self.batch_size, self.y_dim], name='y')
     else:
       self.y = None
 
-    image_dims = [self.output_height, self.output_width, self.c_dim]
-    #uncomment below if using celebA+crop
-    #if self.crop:
-    #  image_dims = [self.output_height, self.output_width, self.c_dim]
-    #else:
-    #  image_dims = [self.input_height, self.input_width, self.c_dim]
+    if self.crop:
+      image_dims = [self.output_height, self.output_width, self.c_dim]
+    else:
+      image_dims = [self.input_height, self.input_width, self.c_dim]
 
     self.inputs = tf.placeholder(
       tf.float32, [self.batch_size] + image_dims, name='real_images')
@@ -118,7 +118,7 @@ class DCGAN(object):
     #loss_type = 1 -> vanilla logloss
     #loss_type = 2 -> wasserstein
 
-    if loss_type == 0:
+    if self.loss_type == 0:
       #cross entropy loss
       self.d_loss_real = tf.reduce_mean(
         sigmoid_cross_entropy_with_logits(self.D_logits, tf.ones_like(self.D)))
@@ -127,13 +127,13 @@ class DCGAN(object):
       self.g_loss = tf.reduce_mean(
         sigmoid_cross_entropy_with_logits(self.D_logits_, tf.ones_like(self.D_)))
       self.d_loss = self.d_loss_real + self.d_loss_fake
-    elif loss_type == 1:
+    elif self.loss_type == 1:
       #vanilla logloss
       self.d_loss_real = -tf.reduce_mean(tf.log(self.D))
       self.d_loss_fake = -tf.reduce_mean(tf.log(1-self.D_))
       self.d_loss = self.d_loss_real+self.d_loss_fake
       self.g_loss = -tf.reduce_mean(tf.log(self.D_))
-    elif loss_type == 2:
+    elif self.loss_type == 2:
       #wasserstein
       self.d_loss_real = tf.reduce_mean(self.D_logits)
       self.d_loss_fake = -tf.reduce_mean(self.D_logits_)
@@ -143,7 +143,6 @@ class DCGAN(object):
     self.d_loss_real_sum = scalar_summary("d_loss_real", self.d_loss_real)
     self.d_loss_fake_sum = scalar_summary("d_loss_fake", self.d_loss_fake)
                           
-
     self.g_loss_sum = scalar_summary("g_loss", self.g_loss)
     self.d_loss_sum = scalar_summary("d_loss", self.d_loss)
 
@@ -164,32 +163,6 @@ class DCGAN(object):
       g_optim = tf.train.AdamOptimizer(config.learning_rate, beta1=config.beta1) \
                         .minimize(self.g_loss, var_list=self.g_vars)
     return d_optim, g_optim
-
-  def read_celebA(self, low, hi):
-    image_files_np = np.array(self.img_data)
-    image_files = image_files_np.take(range(low,hi), mode='wrap')
-      
-    # read images
-    image = [
-        get_image(image_file,
-                  input_height=self.input_height,
-                  input_width=self.input_width,
-                  resize_height=self.output_height,
-                  resize_width=self.output_width,
-                  crop=self.crop,
-                  grayscale=self.grayscale) for image_file in image_files]
-    if (self.grayscale):
-      image_inputs = np.array(image).astype(np.float32)[:, :, :, None]
-    else:
-      image_inputs = np.array(image).astype(np.float32)
-
-    # image labels (one-hot vector)
-    y_np = np.array(self.img_labels)
-    y = y_np.take(range(low,hi), mode='wrap')
-    image_labels = np.zeros((y.shape[0], self.y_dim), dtype=np.float)
-    image_labels[np.arange(y.shape[0]), y-1] = 1.0
-    print("image_inputs.shape:{}, image_labels.shape:{}".format(image_inputs.shape, image_labels.shape))
-    return image_inputs, image_labels
 
   def read_images(self, image_files):
     # read images
@@ -222,8 +195,6 @@ class DCGAN(object):
     if config.dataset == 'mnist':
       sample_inputs = self.data_X[0:self.sample_num]
       sample_labels = self.data_y[0:self.sample_num]
-    #elif config.dataset == 'celebA':
-    #  sample_inputs, sample_labels = self.read_celebA(0, self.sample_num)
     else:
       sample_files = self.img_data[0:self.sample_num]
       sample_inputs, sample_labels = self.read_images(sample_files)
@@ -233,8 +204,6 @@ class DCGAN(object):
     if config.dataset == 'mnist':
       batch_images = self.data_X[idx*config.batch_size:(idx+1)*config.batch_size]
       batch_labels = self.data_y[idx*config.batch_size:(idx+1)*config.batch_size]
-    #elif config.dataset == 'celebA':
-    #  batch_images, batch_labels = self.read_celebA(idx*config.batch_size, (idx+1)*config.batch_size)
     else:
       batch_files = self.img_data[idx*config.batch_size:(idx+1)*config.batch_size]
       batch_images, batch_labels = self.read_images(batch_files)
@@ -271,7 +240,7 @@ class DCGAN(object):
         batch_idxs = min(len(self.data_X), config.train_size) // config.batch_size
       else:      
         self.data = glob(os.path.join(
-          "./data", config.dataset, self.input_fname_pattern))
+          config.data_dir, config.dataset, self.input_fname_pattern))
         batch_idxs = min(len(self.data), config.train_size) // config.batch_size
 
       for idx in xrange(0, batch_idxs):
@@ -334,7 +303,7 @@ class DCGAN(object):
               },
             )
             save_images(samples, image_manifold_size(samples.shape[0]),
-                  './{}/train_{:02d}_{:04d}.png'.format(config.sample_dir, epoch, idx))
+                  './{}/train_{:02d}_{:04d}.png'.format(self.sample_dir, epoch, idx))
             print("[Sample] d_loss: %.8f, g_loss: %.8f" % (d_loss, g_loss)) 
           except:
             print("one pic error!...")
@@ -516,19 +485,25 @@ class DCGAN(object):
       return tf.nn.sigmoid(deconv2d(h2, [self.batch_size, s_h, s_w, self.c_dim], name='g_h3'))
 
   def discriminator(self, image, y=None, reuse=False):
-    return self.dcgan_discriminator(image, y, reuse)
-    #return self.dcgan_cond_discriminator(image, y, reuse)
+    if self.conditional:
+      return self.dcgan_cond_discriminator(image, y, reuse)
+    else:
+      return self.dcgan_discriminator(image, y, reuse)
 
   def generator(self, z, y=None):
-    return self.dcgan_generator(z, y)
-    #return self.dcgan_cond_generator(z, y)
+    if self.conditional:
+      return self.dcgan_cond_generator(z, y)
+    else:
+      return self.dcgan_generator(z, y)
 
   def sampler(self, z, y):
-    return self.dcgan_sampler(z, y)
-    #return self.dcgan_cond_sampler(z, y)
+    if self.conditional:
+      return self.dcgan_cond_sampler(z, y)
+    else:
+      return self.dcgan_sampler(z, y)
 
   def load_mnist(self):
-    data_dir = os.path.join("./data", self.dataset_name)
+    data_dir = os.path.join(self.data_dir, self.dataset_name)
     
     fd = open(os.path.join(data_dir,'train-images-idx3-ubyte'))
     loaded = np.fromfile(file=fd,dtype=np.uint8)
@@ -557,42 +532,18 @@ class DCGAN(object):
     np.random.shuffle(X)
     np.random.seed(seed)
     np.random.shuffle(y)
-    
-    y_vec = np.zeros((len(y), self.y_dim), dtype=np.float)
+
+    y_dim = 10
+    y_vec = np.zeros((len(y), y_dim), dtype=np.float)
     for i, label in enumerate(y):
       y_vec[i,y[i]] = 1.0
     
-    return X/255., y_vec, X[0].shape[-1]
-
-  def load_celebA(self):
-    data = pd.read_csv(os.path.join("./data", self.dataset_name, 'identity_CelebA.txt'), sep=' ')
-    # load 300 images of 10 identities
-    samples = data.groupby(['identity']).filter(lambda x: len(x) == 30).sort_values(by='identity').head(3000)
-    ids = samples['identity'].drop_duplicates().values.tolist()
-    di = dict(zip(ids, xrange(1, len(ids)+1, 1)))
-    samples['identity'] = samples['identity'].map(lambda x: di[x])
-
-    # load image filenames
-    images = [os.path.join("./data", self.dataset_name, x) for x in samples['image'].values.tolist()]
-
-    # find the number of channels
-    imreadImg = imread(images[0])
-    # check if image is a non-grayscale image by checking channel number
-    if len(imreadImg.shape) >= 3:
-      c_dim = imread(images[0]).shape[-1]
-    else:
-      c_dim = 1
-
-    # one-hot encoding of labels
-    self.y_dim = samples['identity'].max()
-    labels = samples['identity'].values.tolist()
-    print('images.length: {}, c_dim: {}, labels.length: {}'.format(len(images), c_dim, len(labels)))
-    return images, labels, c_dim
+    return X/255., y_vec, y_dim, X[0].shape[-1]
 
   # load images with the specified fname pattern
   def load_image_dataset(self):
     # load image filenames
-    images = glob(os.path.join("./data", self.dataset_name, self.input_fname_pattern))
+    images = glob(os.path.join(self.data_dir, self.dataset_name, self.input_fname_pattern))
 
     # find the number of channels
     imreadImg = imread(images[0])
@@ -604,11 +555,11 @@ class DCGAN(object):
       c_dim = 1
 
     # one-hot encoding of labels
-    labels = pd.read_csv(os.path.join("./data", self.dataset_name, 'labels.txt'), sep=' ')
+    labels = pd.read_csv(os.path.join(self.data_dir, self.dataset_name, self.input_fname_labels), sep=' ')
     # 0-index
-    self.y_dim = labels['identity'].max()+1
+    y_dim = labels['identity'].max()+1
     print('images.length: {}, c_dim: {}, labels.length: {}'.format(len(images), c_dim, len(labels)))
-    return images, labels, c_dim
+    return images, labels, y_dim, c_dim
 
   @property
   def model_dir(self):
