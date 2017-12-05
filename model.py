@@ -62,6 +62,8 @@ class DCGAN(object):
       self.data_X, self.data_y, self.c_dim = self.load_mnist()
     elif self.dataset_name == 'celebA':
       self.img_data, self.img_labels, self.c_dim = self.load_celebA()
+    elif self.dataset_name == 'custom':
+      self.img_data, self.img_labels, self.c_dim = self.load_custom()
     else:
       self.img_data, self.img_labels, self.c_dim = self.load_image_dataset()
 
@@ -83,10 +85,12 @@ class DCGAN(object):
     else:
       self.y = None
 
-    if self.crop:
-      image_dims = [self.output_height, self.output_width, self.c_dim]
-    else:
-      image_dims = [self.input_height, self.input_width, self.c_dim]
+    image_dims = [self.output_height, self.output_width, self.c_dim]
+    #uncomment below if using celebA+crop
+    #if self.crop:
+    #  image_dims = [self.output_height, self.output_width, self.c_dim]
+    #else:
+    #  image_dims = [self.input_height, self.input_width, self.c_dim]
 
     self.inputs = tf.placeholder(
       tf.float32, [self.batch_size] + image_dims, name='real_images')
@@ -205,7 +209,7 @@ class DCGAN(object):
       image_inputs = np.array(image).astype(np.float32)
 
     # read labels
-    image_basename = [os.path.basename(x) for x in image]
+    image_basename = [os.path.basename(x) for x in image_files]
     y_labels = self.img_labels[self.img_labels['image'].isin(image_basename)]
     y_labels = y_labels['identity'].tolist()
 
@@ -224,7 +228,7 @@ class DCGAN(object):
       sample_inputs, sample_labels = self.read_celebA(0, self.sample_num)
     else:
       sample_files = self.img_data[0:self.sample_num]
-      sample_inputs, sample_labels = read_images(sample_files)
+      sample_inputs, sample_labels = self.read_images(sample_files)
     return sample_inputs, sample_labels
 
   def read_next_batch(self, config, idx):
@@ -235,7 +239,7 @@ class DCGAN(object):
       batch_images, batch_labels = self.read_celebA(idx*config.batch_size, (idx+1)*config.batch_size)
     else:
       batch_files = self.img_data[idx*config.batch_size:(idx+1)*config.batch_size]
-      batch_inputs, batch_labels = read_images(sample_files)
+      batch_images, batch_labels = self.read_images(batch_files)
     return batch_images, batch_labels
 
   def train(self, config):
@@ -594,6 +598,7 @@ class DCGAN(object):
 
     # find the number of channels
     imreadImg = imread(images[0])
+    print(imreadImg.shape)
     # check if image is a non-grayscale image by checking channel number
     if len(imreadImg.shape) >= 3:
       c_dim = imread(images[0]).shape[-1]
@@ -602,7 +607,8 @@ class DCGAN(object):
 
     # one-hot encoding of labels
     labels = pd.read_csv(os.path.join("./data", self.dataset_name, 'labels.txt'), sep=' ')
-    self.y_dim = labels['identity'].max()
+    # 0-index
+    self.y_dim = labels['identity'].max()+1
     print('images.length: {}, c_dim: {}, labels.length: {}'.format(len(images), c_dim, len(labels)))
     return images, labels, c_dim
 
