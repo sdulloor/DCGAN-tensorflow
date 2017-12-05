@@ -40,6 +40,7 @@ class DCGAN(object):
     self.data_dir = data_dir
     self.dataset_name = dataset_name
     self.input_fname_pattern = input_fname_pattern
+    self.input_fname_labels = input_fname_labels
     self.checkpoint_dir = checkpoint_dir
     self.sample_dir = sample_dir
 
@@ -61,7 +62,6 @@ class DCGAN(object):
 
     self.loss_type = loss_type
     self.conditional = conditional
-    self.y_dim = y_dim
     self.z_dim = z_dim
 
     self.gf_dim = gf_dim
@@ -73,14 +73,8 @@ class DCGAN(object):
     self.build_model()
 
   def build_model(self):
-    # batch normalization : deals with poor initialization helps gradient flow
-    self.d_bn1 = batch_norm(name='d_bn1')
-    self.d_bn2 = batch_norm(name='d_bn2')
-
-    if not self.y_dim:
-      self.d_bn3 = batch_norm(name='d_bn3')
-
-    if self.y_dim:
+    print("self.y_dim {}: {}".format(self.conditional, self.y_dim))
+    if self.conditional:
       self.y = tf.placeholder(tf.float32, [self.batch_size, self.y_dim], name='y')
     else:
       self.y = None
@@ -315,6 +309,7 @@ class DCGAN(object):
     with tf.variable_scope("discriminator") as scope:
       if reuse:
         scope.reuse_variables()
+      # batch normalization : deals with poor initialization helps gradient flow
       self.d_bn1 = batch_norm(name='d_bn1')
       self.d_bn2 = batch_norm(name='d_bn2')
       self.d_bn3 = batch_norm(name='d_bn3')
@@ -331,6 +326,7 @@ class DCGAN(object):
     with tf.variable_scope("discriminator") as scope:
       if reuse:
         scope.reuse_variables()
+      # batch normalization : deals with poor initialization helps gradient flow
       self.d_bn1 = batch_norm(name='d_bn1')
       self.d_bn2 = batch_norm(name='d_bn2')
 
