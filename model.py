@@ -73,11 +73,7 @@ class DCGAN(object):
     self.build_model()
 
   def build_model(self):
-    print("self.y_dim {}: {}".format(self.conditional, self.y_dim))
-    if self.conditional:
-      self.y = tf.placeholder(tf.float32, [self.batch_size, self.y_dim], name='y')
-    else:
-      self.y = None
+    self.y = tf.placeholder(tf.float32, [self.batch_size, self.y_dim], name='y')
 
     if self.crop:
       image_dims = [self.output_height, self.output_width, self.c_dim]
@@ -182,7 +178,6 @@ class DCGAN(object):
     y = np.array(y_labels)
     image_labels = np.zeros((y.shape[0], self.y_dim), dtype=np.float)
     image_labels[np.arange(y.shape[0]), y] = 1.0
-    print("image_inputs.shape:{}, image_labels.shape:{}".format(image_inputs.shape, image_labels.shape))
     return image_inputs, image_labels
 
   def read_dataset(self, config):
