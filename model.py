@@ -60,10 +60,8 @@ class DCGAN(object):
 
     if self.dataset_name == 'mnist':
       self.data_X, self.data_y, self.c_dim = self.load_mnist()
-    elif self.dataset_name == 'celebA':
-      self.img_data, self.img_labels, self.c_dim = self.load_celebA()
-    elif self.dataset_name == 'custom':
-      self.img_data, self.img_labels, self.c_dim = self.load_custom()
+    #elif self.dataset_name == 'celebA':
+    #  self.img_data, self.img_labels, self.c_dim = self.load_celebA()
     else:
       self.img_data, self.img_labels, self.c_dim = self.load_image_dataset()
 
@@ -224,8 +222,8 @@ class DCGAN(object):
     if config.dataset == 'mnist':
       sample_inputs = self.data_X[0:self.sample_num]
       sample_labels = self.data_y[0:self.sample_num]
-    elif config.dataset == 'celebA':
-      sample_inputs, sample_labels = self.read_celebA(0, self.sample_num)
+    #elif config.dataset == 'celebA':
+    #  sample_inputs, sample_labels = self.read_celebA(0, self.sample_num)
     else:
       sample_files = self.img_data[0:self.sample_num]
       sample_inputs, sample_labels = self.read_images(sample_files)
@@ -235,8 +233,8 @@ class DCGAN(object):
     if config.dataset == 'mnist':
       batch_images = self.data_X[idx*config.batch_size:(idx+1)*config.batch_size]
       batch_labels = self.data_y[idx*config.batch_size:(idx+1)*config.batch_size]
-    elif config.dataset == 'celebA':
-      batch_images, batch_labels = self.read_celebA(idx*config.batch_size, (idx+1)*config.batch_size)
+    #elif config.dataset == 'celebA':
+    #  batch_images, batch_labels = self.read_celebA(idx*config.batch_size, (idx+1)*config.batch_size)
     else:
       batch_files = self.img_data[idx*config.batch_size:(idx+1)*config.batch_size]
       batch_images, batch_labels = self.read_images(batch_files)
