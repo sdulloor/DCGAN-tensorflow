@@ -178,6 +178,7 @@ class DCGAN(object):
     y = np.array(y_labels)
     image_labels = np.zeros((y.shape[0], self.y_dim), dtype=np.float)
     image_labels[np.arange(y.shape[0]), y] = 1.0
+
     return image_inputs, image_labels
 
   def read_dataset(self, config):
@@ -528,7 +529,7 @@ class DCGAN(object):
     y_vec = np.zeros((len(y), y_dim), dtype=np.float)
     for i, label in enumerate(y):
       y_vec[i,y[i]] = 1.0
-    
+
     return X/255., y_vec, y_dim, X[0].shape[-1]
 
   # load images with the specified fname pattern
@@ -549,7 +550,7 @@ class DCGAN(object):
     labels = pd.read_csv(os.path.join(self.data_dir, self.dataset_name, self.input_fname_labels), sep=' ')
     # 0-index
     y_dim = labels['identity'].max()+1
-    print('images.length: {}, c_dim: {}, labels.length: {}'.format(len(images), c_dim, len(labels)))
+    print('images.length: {}, y_dim: {}, c_dim: {}, labels.length: {}'.format(len(images), y_dim, c_dim, len(labels)))
     return images, labels, y_dim, c_dim
 
   @property
