@@ -75,10 +75,11 @@ class DCGAN(object):
   def build_model(self):
     self.y = tf.placeholder(tf.float32, [self.batch_size, self.y_dim], name='y')
 
-    if self.crop:
-      image_dims = [self.output_height, self.output_width, self.c_dim]
-    else:
-      image_dims = [self.input_height, self.input_width, self.c_dim]
+    image_dims = [self.output_height, self.output_width, self.c_dim]
+    #if self.crop:
+    #  image_dims = [self.output_height, self.output_width, self.c_dim]
+    #else:
+    #  image_dims = [self.input_height, self.input_width, self.c_dim]
 
     self.inputs = tf.placeholder(
       tf.float32, [self.batch_size] + image_dims, name='real_images')
