@@ -49,7 +49,7 @@ def main(_):
 
   # y_dim is inferred from the dataset name or the labels file
   if FLAGS.conditional and FLAGS.dataset != 'mnist':
-    labels_fname = os.path.join(FLAGS.dataset, FLAGS.input_fname_labels)
+    labels_fname = os.path.join(FLAGS.data_dir, FLAGS.dataset, FLAGS.input_fname_labels)
     if not os.path.exists(labels_fname):
       raise Exception("[!] conditional requires image<->identity labels")
 
