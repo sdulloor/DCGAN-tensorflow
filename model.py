@@ -5,6 +5,7 @@ import math
 from glob import glob
 import tensorflow as tf
 import numpy as np
+import pandas as pd
 from six.moves import xrange
 
 from ops import *
@@ -16,9 +17,11 @@ def conv_out_size_same(size, stride):
 class DCGAN(object):
   def __init__(self, sess, input_height=108, input_width=108, crop=True,
          batch_size=64, sample_num = 64, output_height=64, output_width=64,
-         y_dim=None, z_dim=100, gf_dim=64, df_dim=64,
+         z_dim=100, gf_dim=64, df_dim=64,
          gfc_dim=1024, dfc_dim=1024, c_dim=3, dataset_name='default',
-         input_fname_pattern='*.jpg', checkpoint_dir=None, sample_dir=None):
+         data_dir=None, input_fname_labels='labels.txt',
+         input_fname_pattern='*.jpg', checkpoint_dir=None, sample_dir=None,
+         conditional=False, loss_type=0):
     """
 
     Args:
@@ -33,6 +36,20 @@ class DCGAN(object):
       c_dim: (optional) Dimension of image color. For grayscale input, set to 1. [3]
     """
     self.sess = sess
+
+    self.data_dir = data_dir
+    self.dataset_name = dataset_name
+    self.input_fname_pattern = input_fname_pattern
+    self.input_fname_labels = input_fname_labels
+    self.checkpoint_dir = checkpoint_dir
+    self.sample_dir = sample_dir
+
+    if self.dataset_name == 'mnist':
+      self.data_X, self.data_y, self.y_dim, self.c_dim = self.load_mnist()
+    else:
+      self.img_data, self.img_labels, self.y_dim, self.c_dim = self.load_image_dataset()
+
+    self.grayscale = (self.c_dim == 1)
     self.crop = crop
 
     self.batch_size = batch_size
@@ -43,7 +60,8 @@ class DCGAN(object):
     self.output_height = output_height
     self.output_width = output_width
 
-    self.y_dim = y_dim
+    self.loss_type = loss_type
+    self.conditional = conditional
     self.z_dim = z_dim
 
     self.gf_dim = gf_dim
@@ -52,43 +70,18 @@ class DCGAN(object):
     self.gfc_dim = gfc_dim
     self.dfc_dim = dfc_dim
 
-    self.dataset_name = dataset_name
-    self.input_fname_pattern = input_fname_pattern
-    self.checkpoint_dir = checkpoint_dir
-
-    if self.dataset_name == 'mnist':
-      self.data_X, self.data_y = self.load_mnist()
-      self.c_dim = self.data_X[0].shape[-1]
-    else:
-      self.data = glob(os.path.join("./data", self.dataset_name, self.input_fname_pattern))
-      imreadImg = imread(self.data[0])
-      if len(imreadImg.shape) >= 3: #check if image is a non-grayscale image by checking channel number
-        self.c_dim = imread(self.data[0]).shape[-1]
-      else:
-        self.c_dim = 1
-
-    self.grayscale = (self.c_dim == 1)
-
     self.build_model()
 
   def build_model(self):
-    # batch normalization : deals with poor initialization helps gradient flow
-    self.d_bn1 = batch_norm(name='d_bn1')
-    self.d_bn2 = batch_norm(name='d_bn2')
+    self.y = tf.placeholder(tf.float32, [self.batch_size, self.y_dim], name='y')
 
-    if not self.y_dim:
-      self.d_bn3 = batch_norm(name='d_bn3')
-
-
-    if self.y_dim:
-      self.y = tf.placeholder(tf.float32, [self.batch_size, self.y_dim], name='y')
+    if self.dataset_name == 'mnist':
+      image_dims = [self.input_height, self.input_width, self.c_dim]
     else:
-      self.y = tf.placeholder(tf.float32, [0, ], name='y')#None
+      image_dims = [self.output_height, self.output_width, self.c_dim]
 
     if self.crop:
       image_dims = [self.output_height, self.output_width, self.c_dim]
-    else:
-      image_dims = [self.input_height, self.input_width, self.c_dim]
 
     self.inputs = tf.placeholder(
       tf.float32, [self.batch_size] + image_dims, name='real_images')
@@ -114,18 +107,35 @@ class DCGAN(object):
       except:
         return tf.nn.sigmoid_cross_entropy_with_logits(logits=x, targets=y)
 
-    self.d_loss_real = tf.reduce_mean(
-      sigmoid_cross_entropy_with_logits(self.D_logits, tf.ones_like(self.D)))
-    self.d_loss_fake = tf.reduce_mean(
-      sigmoid_cross_entropy_with_logits(self.D_logits_, tf.zeros_like(self.D_)))
-    self.g_loss = tf.reduce_mean(
-      sigmoid_cross_entropy_with_logits(self.D_logits_, tf.ones_like(self.D_)))
+    #loss_type = 0 -> cross entropy
+    #loss_type = 1 -> vanilla logloss
+    #loss_type = 2 -> wasserstein
+
+    if self.loss_type == 0:
+      #cross entropy loss
+      self.d_loss_real = tf.reduce_mean(
+        sigmoid_cross_entropy_with_logits(self.D_logits, tf.ones_like(self.D)))
+      self.d_loss_fake = tf.reduce_mean(
+        sigmoid_cross_entropy_with_logits(self.D_logits_, tf.zeros_like(self.D_)))
+      self.g_loss = tf.reduce_mean(
+        sigmoid_cross_entropy_with_logits(self.D_logits_, tf.ones_like(self.D_)))
+      self.d_loss = self.d_loss_real + self.d_loss_fake
+    elif self.loss_type == 1:
+      #vanilla logloss
+      self.d_loss_real = -tf.reduce_mean(tf.log(self.D))
+      self.d_loss_fake = -tf.reduce_mean(tf.log(1-self.D_))
+      self.d_loss = self.d_loss_real+self.d_loss_fake
+      self.g_loss = -tf.reduce_mean(tf.log(self.D_))
+    elif self.loss_type == 2:
+      #wasserstein
+      self.d_loss_real = tf.reduce_mean(self.D_logits)
+      self.d_loss_fake = -tf.reduce_mean(self.D_logits_)
+      self.d_loss = self.d_loss_real+self.d_loss_fake
+      self.g_loss = -tf.reduce_mean(self.D_logits_)
 
     self.d_loss_real_sum = scalar_summary("d_loss_real", self.d_loss_real)
     self.d_loss_fake_sum = scalar_summary("d_loss_fake", self.d_loss_fake)
                           
-    self.d_loss = self.d_loss_real + self.d_loss_fake
-
     self.g_loss_sum = scalar_summary("g_loss", self.g_loss)
     self.d_loss_sum = scalar_summary("d_loss", self.d_loss)
 
@@ -137,31 +147,50 @@ class DCGAN(object):
     self.saver = tf.train.Saver()
 
   def optimizer(self, config):
-    d_optim = tf.train.AdamOptimizer(config.learning_rate, beta1=config.beta1) \
-              .minimize(self.d_loss, var_list=self.d_vars)
-    g_optim = tf.train.AdamOptimizer(config.learning_rate, beta1=config.beta1) \
-              .minimize(self.g_loss, var_list=self.g_vars)
+    if config.loss_type == 2:
+      d_optim = tf.train.RMSPropOptimizer(learning_rate=5e-5).minimize(-self.d_loss, var_list=self.d_vars)
+      g_optim = tf.train.RMSPropOptimizer(learning_rate=5e-5).minimize(self.g_loss, var_list=self.g_vars)
+    else:
+      d_optim = tf.train.AdamOptimizer(config.learning_rate, beta1=config.beta1) \
+                        .minimize(self.d_loss, var_list=self.d_vars)
+      g_optim = tf.train.AdamOptimizer(config.learning_rate, beta1=config.beta1) \
+                        .minimize(self.g_loss, var_list=self.g_vars)
     return d_optim, g_optim
+
+  def read_images(self, image_files):
+    # read images
+    image = [
+        get_image(image_file,
+                  input_height=self.input_height,
+                  input_width=self.input_width,
+                  resize_height=self.output_height,
+                  resize_width=self.output_width,
+                  crop=self.crop,
+                  grayscale=self.grayscale) for image_file in image_files]
+    if (self.grayscale):
+      image_inputs = np.array(image).astype(np.float32)[:, :, :, None]
+    else:
+      image_inputs = np.array(image).astype(np.float32)
+
+    # read labels
+    image_basename = [os.path.basename(x) for x in image_files]
+    y_labels = self.img_labels[self.img_labels['image'].isin(image_basename)]
+    y_labels = y_labels['identity'].tolist()
+
+    # image labels (one-hot vector)
+    y = np.array(y_labels)
+    image_labels = np.zeros((y.shape[0], self.y_dim), dtype=np.float)
+    image_labels[np.arange(y.shape[0]), y] = 1.0
+
+    return image_inputs, image_labels
 
   def read_dataset(self, config):
     if config.dataset == 'mnist':
       sample_inputs = self.data_X[0:self.sample_num]
       sample_labels = self.data_y[0:self.sample_num]
     else:
-      sample_files = self.data[0:self.sample_num]
-      sample = [
-          get_image(sample_file,
-                    input_height=self.input_height,
-                    input_width=self.input_width,
-                    resize_height=self.output_height,
-                    resize_width=self.output_width,
-                    crop=self.crop,
-                    grayscale=self.grayscale) for sample_file in sample_files]
-      if (self.grayscale):
-        sample_inputs = np.array(sample).astype(np.float32)[:, :, :, None]
-      else:
-        sample_inputs = np.array(sample).astype(np.float32)
-      sample_labels = []
+      sample_files = self.img_data[0:self.sample_num]
+      sample_inputs, sample_labels = self.read_images(sample_files)
     return sample_inputs, sample_labels
 
   def read_next_batch(self, config, idx):
@@ -169,20 +198,8 @@ class DCGAN(object):
       batch_images = self.data_X[idx*config.batch_size:(idx+1)*config.batch_size]
       batch_labels = self.data_y[idx*config.batch_size:(idx+1)*config.batch_size]
     else:
-      batch_files = self.data[idx*config.batch_size:(idx+1)*config.batch_size]
-      batch = [
-          get_image(batch_file,
-                    input_height=self.input_height,
-                    input_width=self.input_width,
-                    resize_height=self.output_height,
-                    resize_width=self.output_width,
-                    crop=self.crop,
-                    grayscale=self.grayscale) for batch_file in batch_files]
-      if self.grayscale:
-        batch_images = np.array(batch).astype(np.float32)[:, :, :, None]
-      else:
-        batch_images = np.array(batch).astype(np.float32)
-      batch_labels = []
+      batch_files = self.img_data[idx*config.batch_size:(idx+1)*config.batch_size]
+      batch_images, batch_labels = self.read_images(batch_files)
     return batch_images, batch_labels
 
   def train(self, config):
@@ -196,7 +213,7 @@ class DCGAN(object):
       self.G_sum, self.d_loss_fake_sum, self.g_loss_sum])
     self.d_sum = merge_summary(
         [self.z_sum, self.d_sum, self.d_loss_real_sum, self.d_loss_sum])
-    self.writer = SummaryWriter("./logs", self.sess.graph)
+    self.writer = SummaryWriter("./logs/{}".format(int(time.time())), self.sess.graph)
 
     sample_z = np.random.uniform(-1, 1, size=(self.sample_num , self.z_dim))
 
@@ -216,7 +233,7 @@ class DCGAN(object):
         batch_idxs = min(len(self.data_X), config.train_size) // config.batch_size
       else:      
         self.data = glob(os.path.join(
-          "./data", config.dataset, self.input_fname_pattern))
+          config.data_dir, config.dataset, self.input_fname_pattern))
         batch_idxs = min(len(self.data), config.train_size) // config.batch_size
 
       for idx in xrange(0, batch_idxs):
@@ -262,7 +279,6 @@ class DCGAN(object):
             self.z: batch_z,
             self.y: batch_labels
         })
-
         counter += 1
         print("Epoch: [%2d] [%4d/%4d] time: %4.4f, d_loss: %.8f, g_loss: %.8f" \
           % (epoch, idx, batch_idxs,
@@ -279,7 +295,7 @@ class DCGAN(object):
               },
             )
             save_images(samples, image_manifold_size(samples.shape[0]),
-                  './{}/train_{:02d}_{:04d}.png'.format(config.sample_dir, epoch, idx))
+                  './{}/train_{:02d}_{:04d}.png'.format(self.sample_dir, epoch, idx))
             print("[Sample] d_loss: %.8f, g_loss: %.8f" % (d_loss, g_loss)) 
           except:
             print("one pic error!...")
@@ -335,7 +351,7 @@ class DCGAN(object):
       h1 = linear(h0, s_h * s_w * self.c_dim, 'g_h1_lin')
       h1 = tf.reshape(h1, [self.batch_size, s_h, s_w, self.c_dim])
 
-      return tf.nn.sigmoid(h1)
+      return tf.nn.tanh(h1)
 
   def dcgan_sampler(self, z, y):
     with tf.variable_scope("generator") as scope:
@@ -368,22 +384,28 @@ class DCGAN(object):
       h1 = linear(h0, s_h * s_w * self.c_dim, 'g_h1_lin')
       h1 = tf.reshape(h1, [self.batch_size, s_h, s_w, self.c_dim])
 
-      return tf.nn.sigmoid(h1)
+      return tf.nn.tanh(h1)
 
   def discriminator(self, image, y=None, reuse=False):
-    return self.dcgan_discriminator(image, y, reuse)
-    #return self.dcgan_cond_discriminator(image, y, reuse)
+    if self.conditional:
+      return self.dcgan_cond_discriminator(image, y, reuse)
+    else:
+      return self.dcgan_discriminator(image, y, reuse)
 
   def generator(self, z, y=None):
-    return self.dcgan_generator(z, y)
-    #return self.dcgan_cond_generator(z, y)
+    if self.conditional:
+      return self.dcgan_cond_generator(z, y)
+    else:
+      return self.dcgan_generator(z, y)
 
   def sampler(self, z, y):
-    return self.dcgan_sampler(z, y)
-    #return self.dcgan_cond_sampler(z, y)
+    if self.conditional:
+      return self.dcgan_cond_sampler(z, y)
+    else:
+      return self.dcgan_sampler(z, y)
 
   def load_mnist(self):
-    data_dir = os.path.join("./data", self.dataset_name)
+    data_dir = os.path.join(self.data_dir, self.dataset_name)
     
     fd = open(os.path.join(data_dir,'train-images-idx3-ubyte'))
     loaded = np.fromfile(file=fd,dtype=np.uint8)
@@ -412,12 +434,34 @@ class DCGAN(object):
     np.random.shuffle(X)
     np.random.seed(seed)
     np.random.shuffle(y)
-    
-    y_vec = np.zeros((len(y), self.y_dim), dtype=np.float)
+
+    y_dim = 10
+    y_vec = np.zeros((len(y), y_dim), dtype=np.float)
     for i, label in enumerate(y):
       y_vec[i,y[i]] = 1.0
-    
-    return X/255.,y_vec
+
+    return X/255., y_vec, y_dim, X[0].shape[-1]
+
+  # load images with the specified fname pattern
+  def load_image_dataset(self):
+    # load image filenames
+    images = glob(os.path.join(self.data_dir, self.dataset_name, self.input_fname_pattern))
+
+    # find the number of channels
+    imreadImg = imread(images[0])
+    print(imreadImg.shape)
+    # check if image is a non-grayscale image by checking channel number
+    if len(imreadImg.shape) >= 3:
+      c_dim = imread(images[0]).shape[-1]
+    else:
+      c_dim = 1
+
+    # one-hot encoding of labels
+    labels = pd.read_csv(os.path.join(self.data_dir, self.dataset_name, self.input_fname_labels), sep=' ')
+    # 0-index
+    y_dim = labels['identity'].max()+1
+    print('images.length: {}, y_dim: {}, c_dim: {}, labels.length: {}'.format(len(images), y_dim, c_dim, len(labels)))
+    return images, labels, y_dim, c_dim
 
   @property
   def model_dir(self):
