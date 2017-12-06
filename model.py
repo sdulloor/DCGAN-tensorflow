@@ -83,7 +83,7 @@ class DCGAN(object):
     if self.y_dim:
       self.y = tf.placeholder(tf.float32, [self.batch_size, self.y_dim], name='y')
     else:
-      self.y = None
+      self.y = tf.placeholder(tf.float32, [0, ], name='y')#None
 
     if self.crop:
       image_dims = [self.output_height, self.output_width, self.c_dim]
@@ -161,7 +161,7 @@ class DCGAN(object):
         sample_inputs = np.array(sample).astype(np.float32)[:, :, :, None]
       else:
         sample_inputs = np.array(sample).astype(np.float32)
-
+      sample_labels = []
     return sample_inputs, sample_labels
 
   def read_next_batch(self, config, idx):
@@ -182,6 +182,7 @@ class DCGAN(object):
         batch_images = np.array(batch).astype(np.float32)[:, :, :, None]
       else:
         batch_images = np.array(batch).astype(np.float32)
+      batch_labels = []
     return batch_images, batch_labels
 
   def train(self, config):
@@ -290,17 +291,13 @@ class DCGAN(object):
     with tf.variable_scope("discriminator") as scope:
       if reuse:
         scope.reuse_variables()
-      self.d_bn1 = batch_norm(name='d_bn1')
-      self.d_bn2 = batch_norm(name='d_bn2')
-      self.d_bn3 = batch_norm(name='d_bn3')
 
-      h0 = lrelu(conv2d(image, self.df_dim, name='d_h0_conv'))
-      h1 = lrelu(self.d_bn1(conv2d(h0, self.df_dim*2, name='d_h1_conv')))
-      h2 = lrelu(self.d_bn2(conv2d(h1, self.df_dim*4, name='d_h2_conv')))
-      h3 = lrelu(self.d_bn3(conv2d(h2, self.df_dim*8, name='d_h3_conv')))
-      h4 = linear(tf.reshape(h3, [self.batch_size, -1]), 1, 'd_h4_lin')
+      x = tf.reshape(image, [self.batch_size, -1])
 
-      return tf.nn.sigmoid(h4), h4
+      h0 = lrelu(linear(x, self.dfc_dim, 'd_h0_lin'))
+      h1 = linear(h0, 1, 'd_h1_lin')
+
+      return tf.nn.sigmoid(h1), h1
 
   def dcgan_cond_discriminator(self, image, y, reuse):
     with tf.variable_scope("discriminator") as scope:
@@ -317,41 +314,13 @@ class DCGAN(object):
 
   def dcgan_generator(self, z, y):
     with tf.variable_scope("generator") as scope:
-      self.g_bn0 = batch_norm(name='g_bn0')
-      self.g_bn1 = batch_norm(name='g_bn1')
-      self.g_bn2 = batch_norm(name='g_bn2')
-      self.g_bn3 = batch_norm(name='g_bn3')
 
       s_h, s_w = self.output_height, self.output_width
-      s_h2, s_w2 = conv_out_size_same(s_h, 2), conv_out_size_same(s_w, 2)
-      s_h4, s_w4 = conv_out_size_same(s_h2, 2), conv_out_size_same(s_w2, 2)
-      s_h8, s_w8 = conv_out_size_same(s_h4, 2), conv_out_size_same(s_w4, 2)
-      s_h16, s_w16 = conv_out_size_same(s_h8, 2), conv_out_size_same(s_w8, 2)
 
-      # project `z` and reshape
-      self.z_, self.h0_w, self.h0_b = linear(
-          z, self.gf_dim*8*s_h16*s_w16, 'g_h0_lin', with_w=True)
-
-      self.h0 = tf.reshape(
-          self.z_, [-1, s_h16, s_w16, self.gf_dim * 8])
-      h0 = tf.nn.relu(self.g_bn0(self.h0))
-
-      self.h1, self.h1_w, self.h1_b = deconv2d(
-          h0, [self.batch_size, s_h8, s_w8, self.gf_dim*4], name='g_h1', with_w=True)
-      h1 = tf.nn.relu(self.g_bn1(self.h1))
-
-      h2, self.h2_w, self.h2_b = deconv2d(
-          h1, [self.batch_size, s_h4, s_w4, self.gf_dim*2], name='g_h2', with_w=True)
-      h2 = tf.nn.relu(self.g_bn2(h2))
-
-      h3, self.h3_w, self.h3_b = deconv2d(
-          h2, [self.batch_size, s_h2, s_w2, self.gf_dim*1], name='g_h3', with_w=True)
-      h3 = tf.nn.relu(self.g_bn3(h3))
-
-      h4, self.h4_w, self.h4_b = deconv2d(
-          h3, [self.batch_size, s_h, s_w, self.c_dim], name='g_h4', with_w=True)
-
-      return tf.nn.tanh(h4)
+      h0 = tf.nn.relu(linear(z, self.gfc_dim, 'g_h0_lin'))
+      h1 = linear(h0, s_h * s_w * self.c_dim, 'g_h1_lin')
+      h1 = tf.reshape(h1, [self.batch_size, s_h, s_w, self.c_dim])
+      return tf.nn.tanh(h1)
 
   def dcgan_cond_generator(self, z, y):
     with tf.variable_scope("generator") as scope:
@@ -378,29 +347,11 @@ class DCGAN(object):
       self.g_bn3 = batch_norm(name='g_bn3')
 
       s_h, s_w = self.output_height, self.output_width
-      s_h2, s_w2 = conv_out_size_same(s_h, 2), conv_out_size_same(s_w, 2)
-      s_h4, s_w4 = conv_out_size_same(s_h2, 2), conv_out_size_same(s_w2, 2)
-      s_h8, s_w8 = conv_out_size_same(s_h4, 2), conv_out_size_same(s_w4, 2)
-      s_h16, s_w16 = conv_out_size_same(s_h8, 2), conv_out_size_same(s_w8, 2)
+      h0 = tf.nn.relu(linear(z, self.gfc_dim, 'g_h0_lin'))
+      h1 = linear(h0, s_h * s_w * self.c_dim, 'g_h1_lin')
+      h1 = tf.reshape(h1, [self.batch_size, s_h, s_w, self.c_dim])
 
-      # project `z` and reshape
-      h0 = tf.reshape(
-          linear(z, self.gf_dim*8*s_h16*s_w16, 'g_h0_lin'),
-          [-1, s_h16, s_w16, self.gf_dim * 8])
-      h0 = tf.nn.relu(self.g_bn0(h0, train=False))
-
-      h1 = deconv2d(h0, [self.batch_size, s_h8, s_w8, self.gf_dim*4], name='g_h1')
-      h1 = tf.nn.relu(self.g_bn1(h1, train=False))
-
-      h2 = deconv2d(h1, [self.batch_size, s_h4, s_w4, self.gf_dim*2], name='g_h2')
-      h2 = tf.nn.relu(self.g_bn2(h2, train=False))
-
-      h3 = deconv2d(h2, [self.batch_size, s_h2, s_w2, self.gf_dim*1], name='g_h3')
-      h3 = tf.nn.relu(self.g_bn3(h3, train=False))
-
-      h4 = deconv2d(h3, [self.batch_size, s_h, s_w, self.c_dim], name='g_h4')
-
-      return tf.nn.tanh(h4)
+      return tf.nn.tanh(h1)
 
   def dcgan_cond_sampler(self, z, y):
     with tf.variable_scope("generator") as scope:
@@ -420,16 +371,16 @@ class DCGAN(object):
       return tf.nn.sigmoid(h1)
 
   def discriminator(self, image, y=None, reuse=False):
-    #return self.dcgan_discriminator(image, y, reuse)
-    return self.dcgan_cond_discriminator(image, y, reuse)
+    return self.dcgan_discriminator(image, y, reuse)
+    #return self.dcgan_cond_discriminator(image, y, reuse)
 
   def generator(self, z, y=None):
-    #return self.dcgan_generator(z, y)
-    return self.dcgan_cond_generator(z, y)
+    return self.dcgan_generator(z, y)
+    #return self.dcgan_cond_generator(z, y)
 
   def sampler(self, z, y):
-    #return self.dcgan_sampler(z, y)
-    return self.dcgan_cond_sampler(z, y)
+    return self.dcgan_sampler(z, y)
+    #return self.dcgan_cond_sampler(z, y)
 
   def load_mnist(self):
     data_dir = os.path.join("./data", self.dataset_name)
