@@ -29,6 +29,7 @@ flags.DEFINE_boolean("crop", False, "True for training, False for testing [False
 flags.DEFINE_boolean("visualize", False, "True for visualizing, False for nothing [False]")
 flags.DEFINE_integer("generate_test_images", 100, "Number of images to generate during test. [100]")
 flags.DEFINE_boolean("conditional", False, "Model and train conditional GAN")
+flags.DEFINE_boolean("dense", False, "Model and train dense GAN")
 flags.DEFINE_integer("loss_type", 0, "Loss type [0=cross entropy] 1=logloss 2=wasserstein")
 flags.DEFINE_boolean("generate", False, "Generate 100 sample images for testing. Defaults to [False]")
 
@@ -74,6 +75,7 @@ def main(_):
         checkpoint_dir=FLAGS.checkpoint_dir,
         sample_dir=FLAGS.sample_dir,
         conditional = FLAGS.conditional,
+        dense=FLAGS.dense,
         loss_type=FLAGS.loss_type)
 
     show_all_variables()
