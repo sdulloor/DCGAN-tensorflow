@@ -32,7 +32,13 @@ flags.DEFINE_boolean("conditional", False, "Model and train conditional GAN")
 flags.DEFINE_boolean("dense", False, "Model and train dense GAN")
 flags.DEFINE_integer("loss_type", 0, "Loss type [0=cross entropy] 1=logloss 2=wasserstein")
 flags.DEFINE_boolean("generate", False, "Generate 100 sample images for testing. Defaults to [False]")
-flags.DEFINE_integer("exp_num", 0, "Experiment number [0=original DCGAN] 1=Sigmoid y in DIS 2=Y at dense layer in DIS 3=linearing x & y to concat in DIS")
+flags.DEFINE_integer("exp_num", 0,
+        "[0=original DCGAN],"
+        "1=Sigmoid y in DIS,"
+        "2=Y at dense layer in DIS,"
+        "3=linearizing x & y to concat in DIS,"
+        "4=Extra discriminator"
+        "4=Y concat only once before h0 in DIS and GEN")
 
 FLAGS = flags.FLAGS
 

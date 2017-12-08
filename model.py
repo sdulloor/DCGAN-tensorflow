@@ -647,6 +647,20 @@ class DCGAN(object):
 
         h5 = linear(h4, 1, 'd_h5_lin')
         return tf.nn.sigmoid(h5), h5
+      elif self.exp_num == 5:
+        ## Inject y only before h0 in the original DCGAN
+        yb = tf.reshape(y, [self.batch_size, 1, 1, self.y_dim])
+        x = conv_cond_concat(image, yb)
+
+        h0 = lrelu(conv2d(x, self.c_dim + self.y_dim, name='d_h0_conv'))
+
+        h1 = lrelu(self.d_bn1(conv2d(h0, self.df_dim + self.y_dim, name='d_h1_conv')))
+        h1 = tf.reshape(h1, [self.batch_size, -1])
+
+        h2 = lrelu(self.d_bn2(linear(h1, self.dfc_dim, 'd_h2_lin')))
+
+        h3 = linear(h2, 1, 'd_h3_lin')
+        return tf.nn.sigmoid(h3), h3
 
   def _dcgan_cond_generator(self, z, y, train=True, reuse=False):
     with tf.variable_scope("generator") as scope:
@@ -661,23 +675,40 @@ class DCGAN(object):
       s_h2, s_h4 = int(s_h/2), int(s_h/4)
       s_w2, s_w4 = int(s_w/2), int(s_w/4)
 
-      # yb = tf.reshape(y, [-1, 1, 1, self.y_dim])
-      yb = tf.reshape(y, [self.batch_size, 1, 1, self.y_dim])
-      z = concat([z, y], 1)
+      if self.exp_num == 5:
+        ## Inject y only before h0 in the original DCGAN
+        # yb = tf.reshape(y, [-1, 1, 1, self.y_dim])
+        yb = tf.reshape(y, [self.batch_size, 1, 1, self.y_dim])
+        z = concat([z, y], 1)
 
-      h0 = tf.nn.relu(self.g_bn0(linear(z, self.gfc_dim, 'g_h0_lin'), train=train))
-      h0 = concat([h0, y], 1)
+        h0 = tf.nn.relu(self.g_bn0(linear(z, self.gfc_dim, 'g_h0_lin'), train=train))
 
-      h1 = tf.nn.relu(self.g_bn1(
-          linear(h0, self.gf_dim*2*s_h4*s_w4, 'g_h1_lin'), train=train))
-      h1 = tf.reshape(h1, [self.batch_size, s_h4, s_w4, self.gf_dim * 2])
-      h1 = conv_cond_concat(h1, yb)
+        h1 = tf.nn.relu(self.g_bn1(
+            linear(h0, self.gf_dim*2*s_h4*s_w4, 'g_h1_lin'), train=train))
+        h1 = tf.reshape(h1, [self.batch_size, s_h4, s_w4, self.gf_dim * 2])
 
-      h2 = tf.nn.relu(self.g_bn2(
-          deconv2d(h1, [self.batch_size, s_h2, s_w2, self.gf_dim * 2], name='g_h2'), train=train))
-      h2 = conv_cond_concat(h2, yb)
+        h2 = tf.nn.relu(self.g_bn2(
+            deconv2d(h1, [self.batch_size, s_h2, s_w2, self.gf_dim * 2], name='g_h2'), train=train))
 
-      return tf.nn.tanh(deconv2d(h2, [self.batch_size, s_h, s_w, self.c_dim], name='g_h3'))
+        return tf.nn.tanh(deconv2d(h2, [self.batch_size, s_h, s_w, self.c_dim], name='g_h3'))
+      else:
+        # yb = tf.reshape(y, [-1, 1, 1, self.y_dim])
+        yb = tf.reshape(y, [self.batch_size, 1, 1, self.y_dim])
+        z = concat([z, y], 1)
+
+        h0 = tf.nn.relu(self.g_bn0(linear(z, self.gfc_dim, 'g_h0_lin'), train=train))
+        h0 = concat([h0, y], 1)
+
+        h1 = tf.nn.relu(self.g_bn1(
+            linear(h0, self.gf_dim*2*s_h4*s_w4, 'g_h1_lin'), train=train))
+        h1 = tf.reshape(h1, [self.batch_size, s_h4, s_w4, self.gf_dim * 2])
+        h1 = conv_cond_concat(h1, yb)
+
+        h2 = tf.nn.relu(self.g_bn2(
+            deconv2d(h1, [self.batch_size, s_h2, s_w2, self.gf_dim * 2], name='g_h2'), train=train))
+        h2 = conv_cond_concat(h2, yb)
+
+        return tf.nn.tanh(deconv2d(h2, [self.batch_size, s_h, s_w, self.c_dim], name='g_h3'))
 
   def dcgan_cond_generator(self, z, y):
     return self._dcgan_cond_generator(z, y, train=True, reuse=False)
