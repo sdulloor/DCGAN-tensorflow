@@ -32,6 +32,7 @@ flags.DEFINE_boolean("conditional", False, "Model and train conditional GAN")
 flags.DEFINE_boolean("dense", False, "Model and train dense GAN")
 flags.DEFINE_integer("loss_type", 0, "Loss type [0=cross entropy] 1=logloss 2=wasserstein")
 flags.DEFINE_boolean("generate", False, "Generate 100 sample images for testing. Defaults to [False]")
+flags.DEFINE_integer("exp_num", 0, "Experiment number [0=original DCGAN] 1=Sigmoid y in DIS 2=Y at dense layer in DIS 3=linearing x & y to concat in DIS")
 
 FLAGS = flags.FLAGS
 
@@ -76,7 +77,8 @@ def main(_):
         sample_dir=FLAGS.sample_dir,
         conditional = FLAGS.conditional,
         dense=FLAGS.dense,
-        loss_type=FLAGS.loss_type)
+        loss_type=FLAGS.loss_type,
+        exp_num=FLAGS.exp_num)
 
     show_all_variables()
 
@@ -100,7 +102,9 @@ def main(_):
     visualize(sess, dcgan, FLAGS, OPTION)
 
 def generate_samples(sess, dcgan, FLAGS):
+    print('Generating samples...')
     n_samples = 2
+    labels = []
     eval_classifier_dir = './eval_classifier/testdata'
     ## Generate 2 x 64 (num of batches the model accept) sample images:
     for i in range(n_samples):
@@ -108,7 +112,7 @@ def generate_samples(sess, dcgan, FLAGS):
         y = np.random.choice(10, FLAGS.batch_size)
         y_one_hot = np.zeros((FLAGS.batch_size, 10))
         y_one_hot[np.arange(FLAGS.batch_size), y] = 1
-
+        labels.append(y)
         ## Generate the samples
         samples = sess.run(dcgan.sampler, feed_dict={dcgan.z: z_sample, dcgan.y: y_one_hot})
 
@@ -119,7 +123,6 @@ def generate_samples(sess, dcgan, FLAGS):
             if not os.path.exists(eval_classifier_dir):
                 os.makedirs(eval_classifier_dir)
             image_fname = os.path.join(eval_classifier_dir, str(label) + '_' + str(i) + '_' + str(idx) + '.png')
-            scipy.misc.imsave(image_fname, sample.reshape(28, 28))
-
+            scipy.misc.imsave(image_fname, sample.reshape(FLAGS.output_height, FLAGS.output_height, 3))
 if __name__ == '__main__':
   tf.app.run()
