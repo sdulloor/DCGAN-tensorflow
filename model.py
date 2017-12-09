@@ -96,14 +96,16 @@ class DCGAN(object):
     self.sampler            = self.sampler(self.z, self.y)
     self.D_, self.D_logits_ = self.discriminator(self.G, self.y, reuse=True)
 
-    self.D_lbl, self.D_lbl_logits = self.discriminator_lbl(inputs, self.y, reuse=False)
-    self.D_lbl_, self.D_lbl_logits_ = self.discriminator_lbl(self.G, self.y, reuse=True)
+    if self.exp_num == 4:
+      self.D_lbl, self.D_lbl_logits = self.discriminator_lbl(inputs, self.y, reuse=False)
+      self.D_lbl_, self.D_lbl_logits_ = self.discriminator_lbl(self.G, self.y, reuse=True)
 
     self.d_sum = histogram_summary("d", self.D)
     self.d__sum = histogram_summary("d_", self.D_)
     self.G_sum = image_summary("G", self.G)
-    self.d_lbl_sum = histogram_summary("dlbl", self.D)
-    self.d_lbl__sum = histogram_summary("dlbl_", self.D)
+    if self.exp_num == 4:
+      self.d_lbl_sum = histogram_summary("dlbl", self.D)
+      self.d_lbl__sum = histogram_summary("dlbl_", self.D)
 
     def sigmoid_cross_entropy_with_logits(x, y):
       try:
@@ -572,6 +574,15 @@ class DCGAN(object):
   ## cDCGAN networks
   ######################################################################
   def dcgan_cond_discriminator(self, image, y, reuse):
+
+    if self.exp_num == 6:
+      ## Concat x and y before h0 in the original DCGAN
+      ## Call the unconditional discriminator
+      yb = tf.reshape(y, [self.batch_size, 1, 1, self.y_dim])
+      x = conv_cond_concat(image, yb)
+      print("[Disciminator] x.shape: {}, y.shape: {}, yb.shape: {}, xy.shape: {}".format(image.shape, y.shape, yb.shape, x.shape))
+      return self.dcgan_discriminator(x, y, reuse)
+
     with tf.variable_scope("discriminator") as scope:
       if reuse:
         scope.reuse_variables()
@@ -579,11 +590,6 @@ class DCGAN(object):
       self.d_bn1 = batch_norm(name='d_bn1')
       self.d_bn2 = batch_norm(name='d_bn2')
       self.d_bn3 = batch_norm(name='d_bn3')
-      self.d_bn4 = batch_norm(name='d_bn4')
-      self.d_bn5 = batch_norm(name='d_bn5')
-
-      yb = tf.reshape(y, [self.batch_size, 1, 1, self.y_dim])
-      x = conv_cond_concat(image, yb)
 
       if self.exp_num == 0:
         ## Original DCGAN
@@ -631,7 +637,7 @@ class DCGAN(object):
         h5 = linear(h4, 1, 'd_h5_lin')
         return tf.nn.sigmoid(h5), h5
       elif self.exp_num == 3:
-        ## Linearing x and y to concat + dense layer
+        ## Linearizing x and y to concat + dense layer
         x = tf.reshape(image, [self.batch_size, -1])
         xy = concat([x, y], 1)
         xy = lrelu(linear(xy, self.df_dim * self.df_dim * self.c_dim, 'd_xy_lin'))
@@ -711,10 +717,22 @@ class DCGAN(object):
         return tf.nn.tanh(deconv2d(h2, [self.batch_size, s_h, s_w, self.c_dim], name='g_h3'))
 
   def dcgan_cond_generator(self, z, y):
+    if self.exp_num == 6:
+      yb = tf.reshape(y, [self.batch_size, 1, 1, self.y_dim])
+      z = concat([z, y], 1)
+      print("[Generator] yb.shape: {}, y.shape: {}, z.shape: {}".format(yb.shape, y.shape, z.shape))
+      return self.dcgan_generator(z, y)
+
     return self._dcgan_cond_generator(z, y, train=True, reuse=False)
 
   def dcgan_cond_sampler(self, z, y):
-      return self._dcgan_cond_generator(z, y, train=False, reuse=True)
+    if self.exp_num == 6:
+      yb = tf.reshape(y, [self.batch_size, 1, 1, self.y_dim])
+      z = concat([z, y], 1)
+      print("[Sampler] yb.shape: {}, y.shape: {}, z.shape: {}".format(yb.shape, y.shape, z.shape))
+      return self.dcgan_sampler(z, y)
+
+    return self._dcgan_cond_generator(z, y, train=False, reuse=True)
 
   ######################################################################
   ### Discriminator and Generator networks  ###
