@@ -432,18 +432,25 @@ class DCGAN(object):
       self.d_bn2 = batch_norm(name='d_bn2')
       self.d_bn3 = batch_norm(name='d_bn3')
 
-      if self.exp_num == 7 or self.exp_num == 8:
+      print("[Disciminator] image: {}, y: {}".format(image.shape, y.shape))
+      if self.exp_num == 6:
+        yb = tf.reshape(y, [self.batch_size, 1, 1, self.y_dim])
+        x = conv_cond_concat(image, yb)
+        print("[Disciminator:6] yb: {}, x: {}".format(yb.shape, x.shape))
+        image = x
+      elif self.exp_num == 7 or self.exp_num == 8:
         self.d_bn4 = batch_norm(name='d_bn4')
         self.d_bn5 = batch_norm(name='d_bn5')
-        print("[Disciminator: 7] image: {}, y: {}".format(image.shape, y.shape))
+        print("[Disciminator:7|8] image: {}, y: {}".format(image.shape, y.shape))
         yb = tf.reshape(y, [self.batch_size, 1, 1, self.y_dim])
-        print("[Disciminator: 7] yb: {}".format(yb.shape))
+        print("[Disciminator: 7|8] yb: {}".format(yb.shape))
         yb = lrelu(self.d_bn4(conv2d(yb, self.y_dim, name='d_yb_conv')))
-        print("[Disciminator: 7] yb: {}".format(yb.shape))
+        print("[Disciminator: 7|8] yb: {}".format(yb.shape))
         x = lrelu(self.d_bn5(conv2d(image, self.c_dim, name='d_x_conv')))
-        print("[Disciminator: 7] x: {}".format(x.shape))
+        print("[Disciminator: 7|8] x: {}".format(x.shape))
         x = conv_cond_concat(x, yb)
-        print("[Disciminator: 7] x: {}".format(x.shape))
+        print("[Disciminator: 7|8] x: {}".format(x.shape))
+        image = x
 
       h0 = lrelu(self.d_bn0(conv2d(image, self.df_dim, name='d_h0_conv')))
       h1 = lrelu(self.d_bn1(conv2d(h0, self.df_dim*2, name='d_h1_conv')))
@@ -490,8 +497,13 @@ class DCGAN(object):
       s_h8, s_w8 = conv_out_size_same(s_h4, 2), conv_out_size_same(s_w4, 2)
       s_h16, s_w16 = conv_out_size_same(s_h8, 2), conv_out_size_same(s_w8, 2)
 
-      print("[Generator:8] z: {}, y: {}".format(z.shape, y.shape))
-      if self.exp_num == 8:
+      print("[Generator] z: {}, y: {}".format(z.shape, y.shape))
+      if self.exp_num == 6:
+        yb = tf.reshape(y, [self.batch_size, 1, 1, self.y_dim])
+        print("[Generator:6] yb: {}".format(yb.shape))
+        z = concat([z, y], 1)
+        print("[Generator:6] z: {}".format(z.shape))
+      elif self.exp_num == 8:
         z = tf.nn.relu(linear(z, self.gfc_dim, 'g_z_lin'))
         print("[Generator:8] z: {}".format(z.shape))
         yb = tf.nn.relu(linear(y, self.gf_dim, 'g_yb_lin'))
@@ -502,38 +514,38 @@ class DCGAN(object):
       # project `z` and reshape
       self.z_, self.h0_w, self.h0_b = linear(
           z, self.gf_dim*8*s_h16*s_w16, 'g_h0_lin', with_w=True)
-      print("[Generator:8] z_: {}".format(self.z_.shape))
+      print("[Generator] z_: {}".format(self.z_.shape))
 
       self.h0 = tf.reshape(
           self.z_, [-1, s_h16, s_w16, self.gf_dim * 8])
-      print("[Generator:8] h0: {}".format(self.h0.shape))
+      print("[Generator] h0: {}".format(self.h0.shape))
       h0 = tf.nn.relu(self.g_bn0(self.h0))
-      print("[Generator:8] h0: {}".format(h0.shape))
+      print("[Generator] h0: {}".format(h0.shape))
 
       self.h1, self.h1_w, self.h1_b = deconv2d(
           h0, [self.batch_size, s_h8, s_w8, self.gf_dim*4], name='g_h1', with_w=True)
-      print("[Generator:8] h1: {}".format(self.h1.shape))
+      print("[Generator] h1: {}".format(self.h1.shape))
       h1 = tf.nn.relu(self.g_bn1(self.h1))
-      print("[Generator:8] h1: {}".format(h1.shape))
+      print("[Generator] h1: {}".format(h1.shape))
 
       h2, self.h2_w, self.h2_b = deconv2d(
           h1, [self.batch_size, s_h4, s_w4, self.gf_dim*2], name='g_h2', with_w=True)
-      print("[Generator:8] h2: {}".format(self.h2.shape))
+      print("[Generator] h2: {}".format(self.h2.shape))
       h2 = tf.nn.relu(self.g_bn2(h2))
-      print("[Generator:8] h2: {}".format(h2.shape))
+      print("[Generator] h2: {}".format(h2.shape))
 
       h3, self.h3_w, self.h3_b = deconv2d(
           h2, [self.batch_size, s_h2, s_w2, self.gf_dim*1], name='g_h3', with_w=True)
-      print("[Generator:8] h3: {}".format(self.h3.shape))
+      print("[Generator] h3: {}".format(self.h3.shape))
       h3 = tf.nn.relu(self.g_bn3(h3))
-      print("[Generator:8] h3: {}".format(h3.shape))
+      print("[Generator] h3: {}".format(h3.shape))
 
       h4, self.h4_w, self.h4_b = deconv2d(
           h3, [self.batch_size, s_h, s_w, self.c_dim], name='g_h4', with_w=True)
-      print("[Generator:8] h4: {}".format(h4.shape))
+      print("[Generator] h4: {}".format(h4.shape))
 
       tan = tf.nn.tanh(h4)
-      print("[Generator:8] tan: {}".format(tan.shape))
+      print("[Generator] tan: {}".format(tan.shape))
       return tan
 
   def dcgan_sampler(self, z, y):
@@ -545,6 +557,20 @@ class DCGAN(object):
       self.g_bn2 = batch_norm(name='g_bn2')
       self.g_bn3 = batch_norm(name='g_bn3')
 
+      print("[Sampler] z: {}, y: {}".format(z.shape, y.shape))
+      if self.exp_num == 6:
+        yb = tf.reshape(y, [self.batch_size, 1, 1, self.y_dim])
+        print("[Sampler:6] yb: {}".format(yb.shape))
+        z = concat([z, y], 1)
+        print("[Sampler:6] z: {}".format(z.shape))
+      elif self.exp_num == 8:
+        z = tf.nn.relu(linear(z, self.gfc_dim, 'g_z_lin'))
+        print("[Sampler:8] z: {}".format(z.shape))
+        yb = tf.nn.relu(linear(y, self.gf_dim, 'g_yb_lin'))
+        print("[Sampler:8] yb: {}".format(yb.shape))
+        z = concat([z, yb], 1)
+        print("[Sampler:8] z: {}".format(z.shape))
+
       s_h, s_w = self.output_height, self.output_width
       s_h2, s_w2 = conv_out_size_same(s_h, 2), conv_out_size_same(s_w, 2)
       s_h4, s_w4 = conv_out_size_same(s_h2, 2), conv_out_size_same(s_w2, 2)
@@ -552,23 +578,35 @@ class DCGAN(object):
       s_h16, s_w16 = conv_out_size_same(s_h8, 2), conv_out_size_same(s_w8, 2)
 
       # project `z` and reshape
-      h0 = tf.reshape(
-          linear(z, self.gf_dim*8*s_h16*s_w16, 'g_h0_lin'),
-          [-1, s_h16, s_w16, self.gf_dim * 8])
+      z_ = linear(z, self.gf_dim*8*s_h16*s_w16, 'g_h0_lin')
+      print("[Sampler] z_: {}".format(self.z_.shape))
+
+      h0 = tf.reshape(z_, [-1, s_h16, s_w16, self.gf_dim * 8])
+      print("[Sampler] h0: {}".format(self.h0.shape))
       h0 = tf.nn.relu(self.g_bn0(h0, train=False))
+      print("[Sampler] h0: {}".format(h0.shape))
 
       h1 = deconv2d(h0, [self.batch_size, s_h8, s_w8, self.gf_dim*4], name='g_h1')
+      print("[Sampler] h1: {}".format(self.h1.shape))
       h1 = tf.nn.relu(self.g_bn1(h1, train=False))
+      print("[Sampler] h1: {}".format(self.h1.shape))
 
       h2 = deconv2d(h1, [self.batch_size, s_h4, s_w4, self.gf_dim*2], name='g_h2')
+      print("[Sampler] h2: {}".format(self.h2.shape))
       h2 = tf.nn.relu(self.g_bn2(h2, train=False))
+      print("[Sampler] h2: {}".format(self.h2.shape))
 
       h3 = deconv2d(h2, [self.batch_size, s_h2, s_w2, self.gf_dim*1], name='g_h3')
+      print("[Sampler] h3: {}".format(self.h3.shape))
       h3 = tf.nn.relu(self.g_bn3(h3, train=False))
+      print("[Sampler] h3: {}".format(self.h3.shape))
 
       h4 = deconv2d(h3, [self.batch_size, s_h, s_w, self.c_dim], name='g_h4')
+      print("[Sampler] h4: {}".format(h4.shape))
 
-      return tf.nn.tanh(h4)
+      tan = tf.nn.tanh(h4)
+      print("[Sampler] tan: {}".format(tan.shape))
+      return tan
 
   ######################################################################
   ## cDense networks
@@ -610,16 +648,7 @@ class DCGAN(object):
   ######################################################################
   def dcgan_cond_discriminator(self, image, y, reuse):
 
-    if self.exp_num == 6:
-      ## Concat x and y before h0 in the original DCGAN
-      ## Call the unconditional discriminator
-      yb = tf.reshape(y, [self.batch_size, 1, 1, self.y_dim])
-      x = conv_cond_concat(image, yb)
-      print("[Disciminator:0] image: {}, y: {}, yb: {}, x: {}".format(image.shape, y.shape, yb.shape, x.shape))
-      return self.dcgan_discriminator(x, y, reuse)
-    elif self.exp_num == 7 or self.exp_num == 8:
-      ## conv_2d on x and y before feeding to the original DCGAN
-      ## Call the unconditional discriminator
+    if self.exp_num == 6 or self.exp_num == 7 or self.exp_num == 8:
       return self.dcgan_discriminator(image, y, reuse)
 
     with tf.variable_scope("discriminator") as scope:
@@ -782,19 +811,13 @@ class DCGAN(object):
         return tan
 
   def dcgan_cond_generator(self, z, y):
-    if self.exp_num == 6:
-      yb = tf.reshape(y, [self.batch_size, 1, 1, self.y_dim])
-      z = concat([z, y], 1)
-      print("[Generator] yb.shape: {}, y.shape: {}, z.shape: {}".format(yb.shape, y.shape, z.shape))
+    if self.exp_num == 6 or self.exp_num == 8:
       return self.dcgan_generator(z, y)
 
     return self._dcgan_cond_generator(z, y, train=True, reuse=False)
 
   def dcgan_cond_sampler(self, z, y):
-    if self.exp_num == 6:
-      yb = tf.reshape(y, [self.batch_size, 1, 1, self.y_dim])
-      z = concat([z, y], 1)
-      print("[Sampler] yb.shape: {}, y.shape: {}, z.shape: {}".format(yb.shape, y.shape, z.shape))
+    if self.exp_num == 6 or self.exp_num == 8:
       return self.dcgan_sampler(z, y)
 
     return self._dcgan_cond_generator(z, y, train=False, reuse=True)
