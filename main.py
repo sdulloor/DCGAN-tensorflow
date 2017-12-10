@@ -37,8 +37,9 @@ flags.DEFINE_integer("exp_num", 0,
         "1=Sigmoid y in DIS,"
         "2=Y at dense layer in DIS,"
         "3=linearizing x & y to concat in DIS,"
-        "4=Extra discriminator"
-        "4=Y concat only once before h0 in DIS and GEN")
+        "4=Extra discriminator,"
+        "5=Y concat only once before h0 in DIS and GEN,"
+        "6=Y concat only once before h0 in DIS and GEN. Invoke unconditional after.")
 
 FLAGS = flags.FLAGS
 
