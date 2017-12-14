@@ -191,7 +191,7 @@ class DCGAN(object):
 
   def optimizer(self, config):
     d_lbl_optim = None
-    if config.loss_type == 2:
+    if config.loss_type == 2:      
       d_optim = tf.train.RMSPropOptimizer(learning_rate=5e-5).minimize(-self.d_loss, var_list=self.d_vars)
       g_optim = tf.train.RMSPropOptimizer(learning_rate=5e-5).minimize(self.g_loss, var_list=self.g_vars)
       if self.exp_num == 4:
@@ -287,25 +287,41 @@ class DCGAN(object):
         self.data = glob(os.path.join(
           config.data_dir, config.dataset, self.input_fname_pattern))
         batch_idxs = min(len(self.data), config.train_size) // config.batch_size
-
+        
       for idx in xrange(0, batch_idxs):
-        batch_images, batch_labels = self.read_next_batch(config, idx)
+        if self.loss_type != 2:
+          batch_images, batch_labels = self.read_next_batch(config, idx)
 
-        batch_z = np.random.uniform(-1, 1, [config.batch_size, self.z_dim]) \
-              .astype(np.float32)
+          batch_z = np.random.uniform(-1, 1, [config.batch_size, self.z_dim]) \
+                             .astype(np.float32)
 
-        ### Training always assumes labels.
-        # If the network is not conditional, discriminator and generator
-        # will simply ignore the labels
-        # Update D network
-        _, summary_str = self.sess.run([d_optim, self.d_sum],
-          feed_dict={
-            self.inputs: batch_images,
-            self.z: batch_z,
-            self.y:batch_labels,
-          })
-        self.writer.add_summary(summary_str, counter)
+          ### Training always assumes labels.
+          # If the network is not conditional, discriminator and generator
+          # will simply ignore the labels
+          # Update D network
+          _, summary_str = self.sess.run([d_optim, self.d_sum],
+            feed_dict={
+              self.inputs: batch_images,
+              self.z: batch_z,
+              self.y:batch_labels,
+            })
 
+        else:
+          clip_D = [p.assign(tf.clip_by_value(p, -0.01, 0.01)) for p in self.d_vars]
+
+          for i in range(5):
+            batch_images, batch_labels = self.read_next_batch(config, (idx+i) % batch_idxs)
+
+            batch_z = np.random.uniform(-1, 1, [config.batch_size, self.z_dim]) \
+                               .astype(np.float32)
+
+            _, summary_str, _ = self.sess.run([d_optim, self.d_sum, clip_D],
+                                              feed_dict={
+                                                self.inputs: batch_images,
+                                                self.z: batch_z,
+                                                self.y:batch_labels,
+                                              })
+            
         if self.exp_num == 4:
           ## Extra discriminator layer
           _, summary_str = self.sess.run([d_lbl_optim, self.d_lbl_sum],
@@ -314,7 +330,7 @@ class DCGAN(object):
                                            self.z: batch_z,
                                            self.y: batch_labels,
                                          })
-          self.writer.add_summary(summary_str, counter)
+        self.writer.add_summary(summary_str, counter)
 
         # Update G network
         _, summary_str = self.sess.run([g_optim, self.g_sum],

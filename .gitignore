@@ -9,7 +9,7 @@ logs
 test*
 mnist_logs
 nohup*
-
+checkpoint_*/
 web/js/gen_layers.js
 
 # checkpoint
