@@ -740,7 +740,7 @@ class DCGAN(object):
         h2 = self.d_bn2(linear(h1, 1, 'd_h2_lin'))
         sig = tf.nn.sigmoid(h2)
         return sig, h2
-      elif (self.exp_num == 15):
+      elif (self.exp_num == 15) or (self.exp_num == 16) or (self.exp_num == 19):
         ## Inject y at the start of dense layer
         h0 = lrelu(conv2d(image, self.df_dim, name='d_h0_conv'))
         h1 = lrelu(self.d_bn1(conv2d(h0, self.df_dim * 2, name='d_h1_conv')))
@@ -750,6 +750,32 @@ class DCGAN(object):
         h4 = tf.reshape(h3, [self.batch_size, -1])
         ylin = lrelu(linear(y, self.df_dim // 2, 'd_y_lin'))
         h4 = concat([h4, ylin], 1)
+        h4 = lrelu(linear(h4, self.dfc_dim, 'd_h4_lin'))
+
+        h5 = linear(h4, 1, 'd_h5_lin')
+        return tf.nn.sigmoid(h5), h5
+      elif (self.exp_num == 17):
+        ## Inject y at the start of dense layer
+        h0 = lrelu(conv2d(image, self.df_dim, name='d_h0_conv'))
+        h1 = lrelu(self.d_bn1(conv2d(h0, self.df_dim*2, 3, 3, name='d_h1_conv')))
+        h2 = lrelu(self.d_bn2(conv2d(h1, self.df_dim*4, 3, 3, name='d_h2_conv')))
+        h3 = lrelu(self.d_bn3(conv2d(h2, self.df_dim*8, 3, 3, name='d_h3_conv')))
+
+        h4 = tf.reshape(h3, [self.batch_size, -1])
+        h4 = concat([h4, y], 1)
+        h4 = lrelu(linear(h4, self.dfc_dim, 'd_h4_lin'))
+
+        h5 = linear(h4, 1, 'd_h5_lin')
+        return tf.nn.sigmoid(h5), h5
+      elif (self.exp_num == 18):
+        ## Inject y at the start of dense layer
+        h0 = lrelu(conv2d(image, self.df_dim, name='d_h0_conv'))
+        h1 = lrelu(self.d_bn1(conv2d(h0, self.df_dim*2, 4, 4, name='d_h1_conv')))
+        h2 = lrelu(self.d_bn2(conv2d(h1, self.df_dim*4, 4, 4, name='d_h2_conv')))
+        h3 = lrelu(self.d_bn3(conv2d(h2, self.df_dim*8, 4, 4, name='d_h3_conv')))
+
+        h4 = tf.reshape(h3, [self.batch_size, -1])
+        h4 = concat([h4, y], 1)
         h4 = lrelu(linear(h4, self.dfc_dim, 'd_h4_lin'))
 
         h5 = linear(h4, 1, 'd_h5_lin')
@@ -768,7 +794,7 @@ class DCGAN(object):
       s_h2, s_h4 = int(s_h/2), int(s_h/4)
       s_w2, s_w4 = int(s_w/2), int(s_w/4)
 
-      if (self.exp_num == 5) or (self.exp_num == 14):
+      if (self.exp_num == 5) or (self.exp_num == 14) or (self.exp_num == 16) or (self.exp_num == 19):
         ## Inject y only before h0 in the original DCGAN
         # yb = tf.reshape(y, [-1, 1, 1, self.y_dim])
         yb = tf.reshape(y, [self.batch_size, 1, 1, self.y_dim])
@@ -788,6 +814,22 @@ class DCGAN(object):
         ## Inject y only before h0 in the original DCGAN
         ylin = lrelu(linear(y, self.df_dim // 2 , 'g_y_lin'))
         z = concat([z, ylin], 1)
+
+        h0 = tf.nn.relu(self.g_bn0(linear(z, self.gfc_dim, 'g_h0_lin'), train=train))
+
+        h1 = tf.nn.relu(self.g_bn1(
+            linear(h0, self.gf_dim*2*s_h4*s_w4, 'g_h1_lin'), train=train))
+        h1 = tf.reshape(h1, [self.batch_size, s_h4, s_w4, self.gf_dim * 2])
+
+        h2 = tf.nn.relu(self.g_bn2(
+            deconv2d(h1, [self.batch_size, s_h2, s_w2, self.gf_dim * 2], name='g_h2'), train=train))
+
+        return tf.nn.tanh(deconv2d(h2, [self.batch_size, s_h, s_w, self.c_dim], name='g_h3'))
+      elif (self.exp_num == 17) or (self.exp_num == 18):
+        ## Inject y only before h0 in the original DCGAN
+        # yb = tf.reshape(y, [-1, 1, 1, self.y_dim])
+        yb = tf.reshape(y, [self.batch_size, 1, 1, self.y_dim])
+        z = concat([z, y], 1)
 
         h0 = tf.nn.relu(self.g_bn0(linear(z, self.gfc_dim, 'g_h0_lin'), train=train))
 
