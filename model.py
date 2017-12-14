@@ -36,6 +36,7 @@ class DCGAN(object):
       c_dim: (optional) Dimension of image color. For grayscale input, set to 1. [3]
     """
     self.sess = sess
+    self.exp_num = exp_num
 
     self.data_dir = data_dir
     self.dataset_name = dataset_name
@@ -71,7 +72,6 @@ class DCGAN(object):
     self.gfc_dim = gfc_dim
     self.dfc_dim = dfc_dim
 
-    self.exp_num = exp_num
     self.build_model()
 
   def build_model(self):
@@ -226,10 +226,18 @@ class DCGAN(object):
     y_labels = self.img_labels[self.img_labels['image'].isin(image_basename)]
     y_labels = y_labels['identity'].tolist()
 
-    # image labels (one-hot vector)
-    y = np.array(y_labels)
-    image_labels = np.zeros((y.shape[0], self.y_dim), dtype=np.float)
-    image_labels[np.arange(y.shape[0]), y] = 1.0
+    if self.exp_num == 9:
+      ## Convert y-label to binary list
+      lst = []
+      for i, y in enumerate(y_labels):
+        lbl_bin = "000" + str(bin(y))[2:]
+        lst.append([int(d) for d in lbl_bin[-4:]])
+      image_labels = np.array(lst)
+    else:
+      # image labels (one-hot vector)
+      y = np.array(y_labels)
+      image_labels = np.zeros((y.shape[0], self.y_dim), dtype=np.float)
+      image_labels[np.arange(y.shape[0]), y] = 1.0
 
     return image_inputs, image_labels
 
@@ -663,7 +671,7 @@ class DCGAN(object):
 
         h3 = linear(h2, 1, 'd_h3_lin')
         return tf.nn.sigmoid(h3), h3
-      elif self.exp_num == 2:
+      elif (self.exp_num == 2) or (self.exp_num == 14):
         ## Inject y at the start of dense layer
         h0 = lrelu(conv2d(image, self.df_dim, name='d_h0_conv'))
         h1 = lrelu(self.d_bn1(conv2d(h0, self.df_dim*2, name='d_h1_conv')))
@@ -693,7 +701,7 @@ class DCGAN(object):
 
         h5 = linear(h4, 1, 'd_h5_lin')
         return tf.nn.sigmoid(h5), h5
-      elif self.exp_num == 5:
+      elif (self.exp_num == 5) or (self.exp_num == 9):
         ## Inject y only before h0 in the original DCGAN
         yb = tf.reshape(y, [self.batch_size, 1, 1, self.y_dim])
         x = conv_cond_concat(image, yb)
@@ -707,6 +715,87 @@ class DCGAN(object):
 
         h3 = linear(h2, 1, 'd_h3_lin')
         return tf.nn.sigmoid(h3), h3
+      elif (self.exp_num == 10):
+        yb = tf.reshape(y, [self.batch_size, 1, 1, self.y_dim])
+
+        h0 = lrelu(conv2d(image, self.c_dim * 2, name='d_h0_conv'))      # 32
+        h0 = conv_cond_concat(h0, yb)
+        h1 = lrelu(conv2d(h0, self.c_dim * 4, name='d_h1_conv'))         # 16
+        h2 = lrelu(conv2d(h1, self.c_dim * 8, name='d_h2_conv'))         # 8
+        h3 = conv2d(h2, 1, name='d_h3_conv')
+        sig = tf.nn.sigmoid(h3)
+        return sig, h3
+      elif (self.exp_num == 11):
+        yb = tf.reshape(y, [self.batch_size, 1, 1, self.y_dim])
+
+        h0 = lrelu(conv2d(image, self.c_dim * 2, name='d_h0_conv'))      # 32
+        h0 = conv_cond_concat(h0, yb)
+        h1 = lrelu(conv2d(h0, self.c_dim * 4, name='d_h1_conv'))         # 16
+        h2 = lrelu(conv2d(h1, self.c_dim * 8, name='d_h2_conv'))         # 8
+        h2 = tf.reshape(h2, [self.batch_size, -1])
+        h3 = self.d_bn2(linear(h2, 1, 'd_h3_lin'))
+        sig = tf.nn.sigmoid(h3)
+        return sig, h3
+      elif (self.exp_num == 12):
+        yb = tf.reshape(y, [self.batch_size, 1, 1, self.y_dim])
+
+        h0 = lrelu(conv2d(image, self.c_dim + self.y_dim, name='d_h0_conv'))      # 32
+        h0 = conv_cond_concat(h0, yb)
+        h1 = lrelu(conv2d(h0, self.df_dim + self.y_dim, name='d_h1_conv'))         # 16
+        h2 = conv2d(h1, 1, name='d_h2_conv')
+        sig = tf.nn.sigmoid(h2)
+
+        return sig, h2
+      elif (self.exp_num == 13):
+        yb = tf.reshape(y, [self.batch_size, 1, 1, self.y_dim])
+
+        h0 = lrelu(conv2d(image, self.c_dim + self.y_dim, name='d_h0_conv'))      # 32
+        h0 = conv_cond_concat(h0, yb)
+        h1 = lrelu(conv2d(h0, self.df_dim + self.y_dim, name='d_h1_conv'))         # 16
+        h1 = tf.reshape(h1, [self.batch_size, -1])
+        h2 = self.d_bn2(linear(h1, 1, 'd_h2_lin'))
+        sig = tf.nn.sigmoid(h2)
+        return sig, h2
+      elif (self.exp_num == 15) or (self.exp_num == 16) or (self.exp_num == 19):
+        ## Inject y at the start of dense layer
+        h0 = lrelu(conv2d(image, self.df_dim, name='d_h0_conv'))
+        h1 = lrelu(self.d_bn1(conv2d(h0, self.df_dim * 2, name='d_h1_conv')))
+        h2 = lrelu(self.d_bn2(conv2d(h1, self.df_dim * 4, name='d_h2_conv')))
+        h3 = lrelu(self.d_bn3(conv2d(h2, self.df_dim * 8, name='d_h3_conv')))
+
+        h4 = tf.reshape(h3, [self.batch_size, -1])
+        ylin = lrelu(linear(y, self.df_dim // 2, 'd_y_lin'))
+        h4 = concat([h4, ylin], 1)
+        h4 = lrelu(linear(h4, self.dfc_dim, 'd_h4_lin'))
+
+        h5 = linear(h4, 1, 'd_h5_lin')
+        return tf.nn.sigmoid(h5), h5
+      elif (self.exp_num == 17):
+        ## Inject y at the start of dense layer
+        h0 = lrelu(conv2d(image, self.df_dim, name='d_h0_conv'))
+        h1 = lrelu(self.d_bn1(conv2d(h0, self.df_dim*2, 3, 3, name='d_h1_conv')))
+        h2 = lrelu(self.d_bn2(conv2d(h1, self.df_dim*4, 3, 3, name='d_h2_conv')))
+        h3 = lrelu(self.d_bn3(conv2d(h2, self.df_dim*8, 3, 3, name='d_h3_conv')))
+
+        h4 = tf.reshape(h3, [self.batch_size, -1])
+        h4 = concat([h4, y], 1)
+        h4 = lrelu(linear(h4, self.dfc_dim, 'd_h4_lin'))
+
+        h5 = linear(h4, 1, 'd_h5_lin')
+        return tf.nn.sigmoid(h5), h5
+      elif (self.exp_num == 18):
+        ## Inject y at the start of dense layer
+        h0 = lrelu(conv2d(image, self.df_dim, name='d_h0_conv'))
+        h1 = lrelu(self.d_bn1(conv2d(h0, self.df_dim*2, 4, 4, name='d_h1_conv')))
+        h2 = lrelu(self.d_bn2(conv2d(h1, self.df_dim*4, 4, 4, name='d_h2_conv')))
+        h3 = lrelu(self.d_bn3(conv2d(h2, self.df_dim*8, 4, 4, name='d_h3_conv')))
+
+        h4 = tf.reshape(h3, [self.batch_size, -1])
+        h4 = concat([h4, y], 1)
+        h4 = lrelu(linear(h4, self.dfc_dim, 'd_h4_lin'))
+
+        h5 = linear(h4, 1, 'd_h5_lin')
+        return tf.nn.sigmoid(h5), h5
 
   def _dcgan_cond_generator(self, z, y, train=True, reuse=False):
     with tf.variable_scope("generator") as scope:
@@ -721,7 +810,38 @@ class DCGAN(object):
       s_h2, s_h4 = int(s_h/2), int(s_h/4)
       s_w2, s_w4 = int(s_w/2), int(s_w/4)
 
-      if self.exp_num == 5:
+      if (self.exp_num == 5) or (self.exp_num == 14) or (self.exp_num == 16) or (self.exp_num == 19):
+        ## Inject y only before h0 in the original DCGAN
+        # yb = tf.reshape(y, [-1, 1, 1, self.y_dim])
+        yb = tf.reshape(y, [self.batch_size, 1, 1, self.y_dim])
+        z = concat([z, y], 1)
+
+        h0 = tf.nn.relu(self.g_bn0(linear(z, self.gfc_dim, 'g_h0_lin'), train=train))
+
+        h1 = tf.nn.relu(self.g_bn1(
+            linear(h0, self.gf_dim*2*s_h4*s_w4, 'g_h1_lin'), train=train))
+        h1 = tf.reshape(h1, [self.batch_size, s_h4, s_w4, self.gf_dim * 2])
+
+        h2 = tf.nn.relu(self.g_bn2(
+            deconv2d(h1, [self.batch_size, s_h2, s_w2, self.gf_dim * 2], name='g_h2'), train=train))
+
+        return tf.nn.tanh(deconv2d(h2, [self.batch_size, s_h, s_w, self.c_dim], name='g_h3'))
+      elif (self.exp_num == 15):
+        ## Inject y only before h0 in the original DCGAN
+        ylin = lrelu(linear(y, self.df_dim // 2 , 'g_y_lin'))
+        z = concat([z, ylin], 1)
+
+        h0 = tf.nn.relu(self.g_bn0(linear(z, self.gfc_dim, 'g_h0_lin'), train=train))
+
+        h1 = tf.nn.relu(self.g_bn1(
+            linear(h0, self.gf_dim*2*s_h4*s_w4, 'g_h1_lin'), train=train))
+        h1 = tf.reshape(h1, [self.batch_size, s_h4, s_w4, self.gf_dim * 2])
+
+        h2 = tf.nn.relu(self.g_bn2(
+            deconv2d(h1, [self.batch_size, s_h2, s_w2, self.gf_dim * 2], name='g_h2'), train=train))
+
+        return tf.nn.tanh(deconv2d(h2, [self.batch_size, s_h, s_w, self.c_dim], name='g_h3'))
+      elif (self.exp_num == 17) or (self.exp_num == 18):
         ## Inject y only before h0 in the original DCGAN
         # yb = tf.reshape(y, [-1, 1, 1, self.y_dim])
         yb = tf.reshape(y, [self.batch_size, 1, 1, self.y_dim])
@@ -881,7 +1001,10 @@ class DCGAN(object):
     # one-hot encoding of labels
     labels = pd.read_csv(os.path.join(self.data_dir, self.dataset_name, self.input_fname_labels), sep=' ')
     # 0-index
-    y_dim = labels['identity'].max()+1
+    if self.exp_num == 9:
+      y_dim = 4
+    else:
+      y_dim = labels['identity'].max()+1
     print('images.length: {}, y_dim: {}, c_dim: {}, labels.length: {}'.format(len(images), y_dim, c_dim, len(labels)))
     return images, labels, y_dim, c_dim
 
